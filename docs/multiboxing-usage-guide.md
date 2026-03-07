@@ -81,7 +81,7 @@ your-account2@example.com,your-password-here,副帳號-野蠻人(廢寶/鑲材)
 ```json
 {
   "d2r_path": "C:\\Program Files (x86)\\Diablo II Resurrected\\D2R.exe",
-  "launch_delay": 5
+  "launch_delay": 30
 }
 ```
 
@@ -103,7 +103,7 @@ your-account2@example.com,your-password-here,副帳號-野蠻人(廢寶/鑲材)
 
   資料目錄：C:\Users\User\.d2r-hyper-launcher
   D2R 路徑：C:\Program Files (x86)\Diablo II Resurrected\D2R.exe
-  啟動間隔：5 秒
+  啟動間隔：30 秒
 
   帳號列表：
   [1] 主帳號-法師      (player1@gmail.com)  [未啟動]
