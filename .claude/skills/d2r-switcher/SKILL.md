@@ -61,7 +61,7 @@ description: "Handle repository-specific D2R window-switcher work in d2r-hyper-l
 至少跑：
 
 ```powershell
-go test ./...
+.\scripts\go-test.ps1
 go build ./cmd/d2r-hyper-launcher
 ```
 

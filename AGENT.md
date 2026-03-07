@@ -51,6 +51,7 @@
 - 若未來此專案有使用 MongoDB，需注意 `bson.M` 與 `bson.D` 的使用時機；像 `$sort` 這類依賴順序的場景必須使用 `bson.D`
 - 撰寫 Go 測試時，優先使用 `github.com/stretchr/testify/assert` 進行驗證
 - 每次修改若有合理切點，優先補上或擴充測試，避免只改功能不驗證行為
+- 在這台 Windows 開發環境中，若 `go test ./...` 受到 Application Control 阻擋，改用 [scripts/go-test.ps1](scripts/go-test.ps1) 執行整體測試
 
 ## Windows 安全原則
 

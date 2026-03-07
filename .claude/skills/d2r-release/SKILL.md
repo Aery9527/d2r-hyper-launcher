@@ -33,9 +33,11 @@ description: "Handle repository-specific release work in d2r-hyper-launcher. Use
 release 前最低限度一定要跑：
 
 ```powershell
-go test ./...
+.\scripts\go-test.ps1
 go build ./cmd/d2r-hyper-launcher
 ```
+
+若目前環境沒有遭遇 Windows Application Control 阻擋，也可以直接使用 `go test ./...`；但在這台 repo 常見的 Windows 環境，請優先使用 `.\scripts\go-test.ps1`。
 
 注意：
 
@@ -163,7 +165,7 @@ git tag -a vX.Y.Z -m "release: vX.Y.Z"
 2. 找上一個 tag
 3. 看 `git log <last-tag>..HEAD --oneline`
 4. 彙整 commit 並決定 bump 等級
-5. 跑 `go test ./...`
+5. 跑 `.\scripts\go-test.ps1`
 6. 跑 `go build ./cmd/d2r-hyper-launcher`
 7. 決定新版本 `vX.Y.Z`
 8. 寫 release note 到 `docs/releases/vX.Y.Z.md`

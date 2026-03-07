@@ -64,7 +64,7 @@ description: "Handle repository-specific Diablo II: Resurrected multiboxing work
 至少跑：
 
 ```powershell
-go test ./...
+.\scripts\go-test.ps1
 go build ./cmd/d2r-hyper-launcher
 ```
 

@@ -113,6 +113,15 @@ your-account2@example.com,your-password-here,副帳號-野蠻人
 go build -o d2r-hyper-launcher.exe ./cmd/d2r-hyper-launcher
 ```
 
+### 測試
+
+在這台 Windows 環境若直接跑 `go test ./...` 被 Application Control 擋下，請改用 repo 內建包裝腳本：
+
+```powershell
+.\scripts\go-test.ps1
+go build ./cmd/d2r-hyper-launcher
+```
+
 ## 注意事項
 
 - 建議先把 D2R 設成「視窗化」或「無邊框視窗」
