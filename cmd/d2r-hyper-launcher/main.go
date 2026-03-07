@@ -168,6 +168,11 @@ func launchAccount(acc *account.Account, cfg *config.Config, scanner *bufio.Scan
 	if !ensureLaunchReadyD2RPath(cfg, scanner) {
 		return
 	}
+	if isAccountRunning(acc.DisplayName) {
+		fmt.Printf("  ⏭ %s 已在執行中，請先切回既有視窗或改用其他帳號。\n", acc.DisplayName)
+		fmt.Println()
+		return
+	}
 
 	// 選擇區域
 	fmt.Println()
@@ -187,6 +192,11 @@ func launchAccount(acc *account.Account, cfg *config.Config, scanner *bufio.Scan
 		return
 	}
 
+	modArgs, ok := selectLaunchMod(cfg.D2RPath, scanner)
+	if !ok {
+		return
+	}
+
 	// 解密密碼
 	password, err := account.GetDecryptedPassword(acc)
 	if err != nil {
@@ -197,7 +207,7 @@ func launchAccount(acc *account.Account, cfg *config.Config, scanner *bufio.Scan
 	fmt.Printf("  正在啟動 %s (%s)...\n", acc.DisplayName, region.Name)
 
 	// 啟動 D2R
-	pid, err := process.LaunchD2R(cfg.D2RPath, acc.Email, password, region.Address)
+	pid, err := process.LaunchD2R(cfg.D2RPath, acc.Email, password, region.Address, modArgs...)
 	if err != nil {
 		fmt.Printf("  啟動失敗：%v\n", err)
 		return
@@ -518,6 +528,10 @@ func runningAccountWindowTitles() map[string]bool {
 	}
 
 	return running
+}
+
+func isAccountRunning(displayName string) bool {
+	return process.FindWindowByTitle(d2r.WindowTitle(displayName))
 }
 
 func pendingBatchAccounts(accounts []account.Account, runningTitles map[string]bool) []*account.Account {

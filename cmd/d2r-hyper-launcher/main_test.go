@@ -50,6 +50,10 @@ func TestFormatLaunchDelayMessage(t *testing.T) {
 	assert.Equal(t, "  等待 30 秒後啟動下一個帳號：VoidLife", formatLaunchDelayMessage(30, "VoidLife"))
 }
 
+func TestIsAccountRunningReturnsFalseForMissingWindow(t *testing.T) {
+	assert.False(t, isAccountRunning("DefinitelyNotRunningAccount"))
+}
+
 func TestEnsureLaunchReadyD2RPathWithSetupAcceptsExistingPath(t *testing.T) {
 	tmpDir := t.TempDir()
 	d2rPath := filepath.Join(tmpDir, "D2R.exe")
