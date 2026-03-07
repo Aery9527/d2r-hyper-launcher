@@ -20,6 +20,8 @@ description: "Handle repository-specific git commit work in d2r-hyper-launcher. 
 2. **一定要先跑測試，測試通過後才能 commit。**
 3. 若改動影響使用者可見流程、設定、限制、技術前提或 skill 描述，先同步更新相關 `README`、`docs/`、`.claude/skills/`。
 4. 若測試失敗，不要硬 commit；先修正或明確告知使用者目前仍有失敗。
+5. 建立 commit 後，預設直接 push 到目前分支的 remote upstream。
+6. 若 push 前需要同步遠端而遇到 conflict，或 push / rebase / merge 過程出現衝突，停止操作並通知使用者 review。
 
 ## 測試規則
 
@@ -101,6 +103,8 @@ download flow first while still preserving deeper references.
 4. 確認文件與 skill 是否已同步
 5. 撰寫高階語意的 commit message
 6. 執行 `git commit`
+7. 直接 `git push`
+8. 若 push 失敗且涉及同步衝突，通知使用者 review，不要自作主張解 conflict
 
 若在這個環境實際建立 commit，commit message 最後要加上：
 
@@ -115,4 +119,6 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 1. 先說明你要檢查變更與跑測試
 2. 明確回報測試是否通過
 3. 再提供或使用高階語意的 commit message
-4. 若發現文件 / skill 尚未同步，先補齊再 commit
+4. commit 後預設直接回報 push 結果
+5. 若發現文件 / skill 尚未同步，先補齊再 commit
+6. 若 push 或同步過程有 conflict，明確請使用者 review
