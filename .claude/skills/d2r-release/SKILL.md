@@ -119,18 +119,20 @@ release note 應該聚焦：
 - 涉及哪些 scope（例如 `multiboxing`、`switcher`、`docs`、`repo workflow`）
 - 若有必要，補充升級注意事項
 
+release note 一律使用**中文說明**，不要混用英文段落或英文條列，除非是必要的專有名詞（例如 `DisplayName`、`D2R.exe`、`switcher`）。
+
 建議結構：
 
 ```markdown
 # vX.Y.Z
 
-## Summary
+## 摘要
 - ...
 
-## Highlights
+## 重點
 - ...
 
-## Scope changes
+## 各範圍變更
 ### multiboxing
 - ...
 
@@ -140,7 +142,7 @@ release note 應該聚焦：
 ### docs / workflow
 - ...
 
-## Upgrade notes
+## 升級注意事項
 - ...
 ```
 
