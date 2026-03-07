@@ -21,6 +21,27 @@ description: "Create a reviewable refactor plan when code structure shows archit
 
 這個 skill 的目標，是讓「交付需求」與「整理架構」變成兩段清楚的流程，而不是互相打架。
 
+## 輸出位置規則
+
+分析完成後，除了在對話裡摘要回報，也要**直接把 plan 寫成 markdown 檔**：
+
+```text
+refactor-plan/<core-scope>-refactor.md
+```
+
+命名原則：
+
+- 用核心 scope 命名，而不是任務編號
+- 檔名一律以 `-refactor.md` 作為 suffix
+- 優先使用簡短、穩定、可重複沿用的名稱
+- 例如：
+  - `refactor-plan/cli-refactor.md`
+  - `refactor-plan/auth-refactor.md`
+  - `refactor-plan/parser-refactor.md`
+  - `refactor-plan/import-pipeline-refactor.md`
+
+若對應 scope 的 plan 已存在，預設更新既有 `*-refactor.md` 檔案，而不是另外再生一個相近名稱的新檔。
+
 ## 什麼情況算是架構訊號
 
 以下任一情況，通常都表示值得啟動這個 skill：
@@ -105,6 +126,47 @@ description: "Create a reviewable refactor plan when code structure shows archit
 
 除非使用者明確說要動手 refactor，否則預設只產出 plan。
 
+完成時請做兩件事：
+
+1. 將 plan 寫入 `refactor-plan/<core-scope>-refactor.md`
+2. 在對話中給使用者一個精簡摘要，方便 review
+
+## 當使用者 review 後要求開始實作
+
+如果使用者已經 review 完 `refactor-plan/<core-scope>-refactor.md`，並明確要求你開始執行其中內容：
+
+1. **先建立新 branch，再開始 refactor**
+2. branch 名稱要根據當前任務內容適當命名，不要用隨意流水號
+3. 命名應能讓人一眼看出這次 refactor 的核心 scope
+
+命名示例：
+
+- `refactor/cli-selection-flow`
+- `refactor/auth-boundary`
+- `refactor/parser-cohesion`
+- `refactor/import-pipeline`
+
+避免：
+
+- `test-branch`
+- `tmp-refactor`
+- `refactor-plan`
+- `branch-123`
+
+核心原因：
+
+- refactor 通常跨檔案、跨模組，隔離在獨立 branch 比較容易 review
+- 使用者已批准的是「執行這份 plan」，不是把它和其他進行中的工作混在一起
+- 好的 branch 名稱能讓後續 commit、PR、review 都更清楚
+
+所以這個 skill 的完整節奏是：
+
+1. 先完成當前任務
+2. 產出 `refactor-plan/<core-scope>-refactor.md`
+3. 等使用者 review
+4. 若使用者批准實作，再建立對應的 `refactor/<task-scope>` branch
+5. 然後才開始真正的 refactor
+
 建議格式：
 
 ```markdown
@@ -149,4 +211,6 @@ description: "Create a reviewable refactor plan when code structure shows archit
 2. 為什麼它不是單純一次性小改動
 3. 目前已先完成哪個當前任務
 4. 這份 refactor plan 想解決什麼
-5. 這份 plan 目前只是 proposal，是否真的實作由使用者決定
+5. plan 已寫到哪個 `refactor-plan/<core-scope>-refactor.md` 檔案
+6. 若使用者批准實作，會先建立哪種命名風格的新 branch
+7. 這份 plan 目前只是 proposal，是否真的實作由使用者決定
