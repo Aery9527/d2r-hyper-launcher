@@ -46,6 +46,8 @@ your-account2@example.com,your-password-here,副帳號-野蠻人(廢寶/鑲材)
 
 > 第一次執行後，明文密碼會自動改寫成 `ENC:` 開頭的加密字串。  
 > 這是用 Windows DPAPI 加密，之後不用自己手動加密；若換電腦或換 Windows 使用者，請再填一次明文密碼。
+>
+> 如果你進遊戲後卡在 Battle.net 登入中的訊息，高機率是 `accounts.csv` 裡的密碼填錯了，請先回去確認該帳號密碼是否正確。
 
 ### 4. 執行 `d2r-hyper-launcher.exe`
 
@@ -81,6 +83,8 @@ your-account2@example.com,your-password-here,副帳號-野蠻人(廢寶/鑲材)
 - `s`：設定視窗切換快捷鍵／滑鼠側鍵／搖桿按鍵
 - `r`：重新讀取 `accounts.csv` 並刷新狀態
 - `q`：離開工具
+
+補充：`a` 批次啟動預設的 `launch_delay` 是 30 秒。這是我在開發測試時實際踩出來比較安全的建議值，因為如果短時間內太頻繁重複登入／關閉，Battle.net 端有機率把連線擋住；具體會擋多久不一定，但原則上就是盡量避免短時間內連線太多次。
 
 ### 6. 想看更仔細的操作說明
 
