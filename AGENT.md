@@ -44,9 +44,24 @@
   - `q`：離開程式
 - 相關共用邏輯集中在 [cmd/d2r-hyper-launcher/main.go](cmd/d2r-hyper-launcher/main.go)
 
+## Go 開發慣例
+
+- 若 struct 明確實作某個介面，請在 struct 宣告上方加入 `var _ InterfaceName = (*StructName)(nil)` 做靜態驗證與意圖標示
+- 使用 `any`，不要使用 `interface{}`
+- 若未來此專案有使用 MongoDB，需注意 `bson.M` 與 `bson.D` 的使用時機；像 `$sort` 這類依賴順序的場景必須使用 `bson.D`
+- 撰寫 Go 測試時，優先使用 `github.com/stretchr/testify/assert` 進行驗證
+- 每次修改若有合理切點，優先補上或擴充測試，避免只改功能不驗證行為
+
 ## Windows 安全原則
 
 - 除了既有核心 handle 功能外，不要擴大使用低階或高風險 Windows 手法
 - 新功能優先使用 Go 標準庫與 `golang.org/x/sys/windows`
 - 若新增 D2R 工具能力，優先延續目前專案的安全界線與 CLI 互動風格
+
+## 變更收尾原則
+
+- 測試通過後，檢查所有受影響 scope 的文件是否需要同步更新
+- 若修改影響使用者可見流程、選單、設定、限制或技術前提，需同步更新相關 `README`、`docs/` 與其他對應 md 文件
+- 若修改影響既有 skill 的觸發條件、工作範圍、操作流程或重要事實，需同步更新 `.claude/skills/` 內對應內容
+- 目標是讓文件與 skill 描述都與目前程式碼邏輯保持一致，不留下過期說明
 
