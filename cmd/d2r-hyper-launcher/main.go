@@ -233,6 +233,19 @@ func launchAll(accounts []account.Account, cfg *config.Config, scanner *bufio.Sc
 		return
 	}
 
+	runningTitles := runningAccountWindowTitles()
+	pendingAccounts := pendingBatchAccounts(accounts, runningTitles)
+	fmt.Println("  已預先掃描目前執行中的 D2R 視窗：")
+	for _, line := range batchAccountStatusLines(accounts, runningTitles) {
+		fmt.Println(line)
+	}
+	if len(pendingAccounts) == 0 {
+		fmt.Println("  所有帳號都已在執行中。")
+		fmt.Println()
+		return
+	}
+	fmt.Printf("  本次只會啟動上面標示為 [未啟動] 的帳號，共 %d 個。\n", len(pendingAccounts))
+
 	fmt.Println()
 	fmt.Println("  選擇區域 (1=NA, 2=EU, 3=Asia)")
 	printSubMenuNav()
@@ -254,22 +267,6 @@ func launchAll(accounts []account.Account, cfg *config.Config, scanner *bufio.Sc
 	if !ok {
 		return
 	}
-
-	runningTitles := runningAccountWindowTitles()
-	pendingAccounts := pendingBatchAccounts(accounts, runningTitles)
-	if len(pendingAccounts) == 0 {
-		fmt.Println("  所有帳號都已在執行中。")
-		fmt.Println()
-		return
-	}
-
-	for i := range accounts {
-		if runningTitles[d2r.WindowTitle(accounts[i].DisplayName)] {
-			fmt.Printf("  ⏭ %s 已在執行中，跳過\n", accounts[i].DisplayName)
-		}
-	}
-
-	fmt.Printf("  已預先掃描目前執行中的 D2R 視窗，本次將啟動 %d 個尚未啟動的帳號。\n", len(pendingAccounts))
 
 	for i, acc := range pendingAccounts {
 
@@ -544,6 +541,31 @@ func pendingBatchAccounts(accounts []account.Account, runningTitles map[string]b
 	}
 
 	return pending
+}
+
+func runningBatchAccounts(accounts []account.Account, runningTitles map[string]bool) []*account.Account {
+	running := make([]*account.Account, 0, len(accounts))
+	for i := range accounts {
+		if !runningTitles[d2r.WindowTitle(accounts[i].DisplayName)] {
+			continue
+		}
+		running = append(running, &accounts[i])
+	}
+
+	return running
+}
+
+func batchAccountStatusLines(accounts []account.Account, runningTitles map[string]bool) []string {
+	lines := make([]string, 0, len(accounts))
+	for i := range accounts {
+		status := "未啟動"
+		if runningTitles[d2r.WindowTitle(accounts[i].DisplayName)] {
+			status = "已啟動"
+		}
+		lines = append(lines, fmt.Sprintf("  [%s] %s (%s)", status, accounts[i].DisplayName, accounts[i].Email))
+	}
+
+	return lines
 }
 
 func formatLaunchDelayMessage(delaySeconds int, nextDisplayName string) string {

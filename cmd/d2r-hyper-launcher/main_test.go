@@ -46,6 +46,41 @@ func TestPendingBatchAccountsReturnsEmptyWhenAllRunning(t *testing.T) {
 	assert.Empty(t, pending)
 }
 
+func TestRunningBatchAccountsReturnsOnlyRunningAccounts(t *testing.T) {
+	accounts := []account.Account{
+		{DisplayName: "Alpha"},
+		{DisplayName: "Bravo"},
+		{DisplayName: "Charlie"},
+	}
+	runningTitles := map[string]bool{
+		d2r.WindowTitle("Alpha"):   true,
+		d2r.WindowTitle("Charlie"): true,
+	}
+
+	running := runningBatchAccounts(accounts, runningTitles)
+
+	assert.Len(t, running, 2)
+	assert.Equal(t, "Alpha", running[0].DisplayName)
+	assert.Equal(t, "Charlie", running[1].DisplayName)
+}
+
+func TestBatchAccountStatusLinesShowsRunningAndPendingAccounts(t *testing.T) {
+	accounts := []account.Account{
+		{DisplayName: "Alpha", Email: "alpha@example.com"},
+		{DisplayName: "Bravo", Email: "bravo@example.com"},
+	}
+	runningTitles := map[string]bool{
+		d2r.WindowTitle("Bravo"): true,
+	}
+
+	lines := batchAccountStatusLines(accounts, runningTitles)
+
+	assert.Equal(t, []string{
+		"  [未啟動] Alpha (alpha@example.com)",
+		"  [已啟動] Bravo (bravo@example.com)",
+	}, lines)
+}
+
 func TestFormatLaunchDelayMessage(t *testing.T) {
 	assert.Equal(t, "  等待 30 秒後啟動下一個帳號：VoidLife", formatLaunchDelayMessage(30, "VoidLife"))
 }
