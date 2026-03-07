@@ -1,102 +1,257 @@
-# CLI Refactor Plan
+# CLI and Internal Boundary Refactor Plan
 
-## 為什麼這是架構訊號
+## 為什麼這次要把 CLI 與 `internal\` 一起整理
 
-- 最近為了把「玩家輸入錯誤時不要立刻跳回主選單」這個 UX 規則做一致，必須同時修改主選單、區域選單、mod 選單、flag 選單、switcher 選單
-- 這代表「CLI 錯誤輸入回饋」其實是跨多個 flow 的共通 concern，但原本沒有單一清楚落點
-- `cmd/d2r-hyper-launcher/cli_feedback.go` 雖然成功把錯誤提示樣式收斂成 common helper，但也反過來暴露：menu flow、驗證與導航控制仍然大量散在 `cmd/d2r-hyper-launcher/main.go`
+- 原本的 CLI refactor 方案三，核心是在解決 `cmd/d2r-hyper-launcher/main.go` 同時承擔 menu renderer、selector、validator、feedback、domain coordinator 的問題
+- 但如果只拆 CLI flow，不同時整理 `internal\` 的 package 邊界，`main.go` 只是把複雜度搬家，整體模組命名仍然不清楚
+- 目前專案對外提供的核心能力其實很明確：**multiboxing** 與 **switcher**
+- 因此 `internal\` 應該收斂成：
+  - `common`：跨功能共用基礎
+  - `multiboxing`：多開相關 domain
+  - `switcher`：切窗相關 domain
 
-## 問題落點
+這表示這次不只是單純拆檔，而是一次把 **CLI flow 邊界** 與 **feature package 邊界** 一起校正。
+
+## 目前結構的問題落點
 
 ### `cmd/d2r-hyper-launcher/main.go`
 
-- 主選單 dispatch、區域選擇、mod 選擇、flag 設定、switcher 設定都集中在同一個大檔案
-- `launchAccount()` 與 `launchAll()` 有相似的區域 / mod 選擇結構
-- `setupAccountLaunchFlags()`、`configureFlagsByFlag()`、`configureFlagsByAccount()` 把 UI 顯示、輸入解析、確認流程與 domain 套用混在一起
-- `isMenuNav()` / `printSubMenuNav()` 雖然統一了導航字元，但沒有統一整個 prompt → validate → feedback flow
+- 主選單 dispatch、區域選擇、mod 選擇、flags 設定、switcher 設定、D2R path setup 都集中在同一檔案
+- 最近只是統一 invalid input feedback，就需要在多個 flow 同步修改，說明 CLI concern 仍然散落
+- 即使 `cli_feedback.go` 已收斂錯誤提示樣式，prompt → validate → retry → navigate 的流程仍然分散
 
-### `cmd/d2r-hyper-launcher/cli_feedback.go`
+### `internal\` top-level package
 
-- 目前只收斂了「錯誤怎麼顯示」
-- 還沒有收斂「錯誤後怎麼重試 / 返回」與「哪些選單應 loop、哪些應 exit」這些更高層的互動規則
+目前的 top-level package：
 
-## 目前成本
+- `account`
+- `config`
+- `d2r`
+- `handle`
+- `mods`
+- `process`
+- `switcher`
 
-- 新增一個小型 CLI UX 規則，也要同步修改很多 callsite
-- 同類型輸入錯誤很容易因為漏改，變成不同選單行為不一致
-- `main.go` 越來越像一個集中所有互動細節的巨型 orchestration 檔案
-- 測試雖然可補，但驗證點散，後續擴充成本會持續上升
+這組命名比較像歷史演進結果，而不是功能邊界：
 
-## 可行方案
+- `process` 同時混有 generic process finder 與 D2R-specific launcher/window 行為
+- `config` 同時有 config model 與 UI picker
+- `handle` 名稱偏底層，但實際主要服務多開啟動
+- `account`、`mods` 本質上都屬於 multiboxing
 
-### 方案 1：低風險，先收斂共用驗證與 selector helper
+## 目標結構
 
-目標：不改整體流程，只減少散落邏輯。
+### 1. `internal\` 只保留三個核心 scope
 
-可做的事：
+```text
+internal/
+  common/
+    d2r/
+    config/
+    process/
+  multiboxing/
+    account/
+    launcher/
+    mods/
+    monitor/
+  switcher/
+```
 
-- 把 region 選擇抽成 `selectRegion(scanner)` 類型 helper
-- 把 mod 選擇、單值 index 驗證、range parsing 這類 CLI validator / selector 再往共用 helper 收斂
-- 讓 `main.go` 保留 orchestration，但減少重複的 prompt + parse + validate pattern
+### 2. CLI flow 明確拆層
 
-適合原因：
+```text
+cmd/d2r-hyper-launcher/
+  main.go
+  menu.go
+  cli/
+    feedback.go
+    selectors.go
+    validators.go
+    launchers.go
+    switcher_menu.go
+    d2r_path_menu.go
+    flags/
+      flags_menu.go
+      flags_config.go
+```
 
-- 風險低
-- 可逐步做
-- 不會一次打亂目前 CLI 操作習慣
+## package migration 對應
 
-### 方案 2：中風險，建立共用 prompt / selection pipeline
+| 現在 | 目標 | 原因 |
+| --- | --- | --- |
+| `internal/d2r` | `internal/common/d2r` | D2R 常數、region、process/window 名稱屬於跨功能共用基礎 |
+| `internal/config/config.go` | `internal/common/config` | 設定模型與 JSON I/O 是共用基礎 |
+| `internal/config/picker.go` | `cmd/d2r-hyper-launcher/cli` | 這是 CLI/UI 行為，不適合留在 `internal/common` |
+| `internal/process/finder.go` | `internal/common/process` | generic process discovery 可被不同功能共用 |
+| `internal/process/launcher.go` | `internal/multiboxing/launcher` | D2R 啟動屬於多開 domain |
+| `internal/process/window.go` | `internal/multiboxing/launcher` | 視窗命名與帳號啟動綁在一起 |
+| `internal/handle/*` | `internal/multiboxing/launcher` | handle 關閉目前本質上是多開啟動支援 |
+| `internal/account/*` | `internal/multiboxing/account` | 帳號、CSV、DPAPI、launch flags 都是多開 domain |
+| `internal/mods/*` | `internal/multiboxing/mods` | mod 探測與多開啟動相關 |
+| `internal/switcher/*` | `internal/switcher/*` | 已是明確功能邊界，維持不變 |
 
-目標：把「顯示選項 → 讀輸入 → 判斷導航 → 驗證 → 錯誤回饋 → 成功返回結果」變成一套可重用流程。
+## CLI 目標責任分配
 
-可做的事：
+### `main.go`
 
-- 建一層共用 CLI prompt helper
-- 讓帳號選擇、flag 選擇、region 選擇、mod 選擇都走一致 API
-- 把 retry / invalid input / nav handling 的一致性收進同一層
+- app 啟動
+- 載入 config / accounts
+- 啟動 switcher background components
+- 主選單 dispatch
 
-收益：
+### `cli/feedback.go`
 
-- 後續加 menu flow 時，不必重寫一套新的 scanner + if/return 組合
-- 一致性更容易保證
+- invalid input 與錯誤暫停提示
+- confirmation / warning 類輸出 helper
 
-風險：
+### `cli/selectors.go`
 
-- 需要調整多個現有 flow
-- 若抽象設計過重，容易把簡單 menu 變難懂
+- region selector
+- mod selector
+- account selector
+- 共用清單型輸入流程
 
-### 方案 3：較大範圍，將 CLI flow 拆成 menu/domain 分層
+### `cli/validators.go`
 
-目標：讓 `main.go` 不再同時扮演 menu renderer、validator、navigator、domain coordinator。
+- range / index parsing
+- 單選 / 多選格式驗證
+- 導航字元與共用 retry 判斷
 
-可做的事：
+### `cli/launchers.go`
 
-- 把 CLI flow 分成更清楚的檔案或 package，例如：
-  - menu / prompt / feedback
-  - multibox launch flow
-  - account flag config flow
-  - switcher config flow
-- 讓 `main.go` 只負責主選單 dispatch
+- `launchAccount`
+- `launchAll`
+- `launchOffline`
 
-這是較完整的方向，但不建議立刻做，除非接下來還會持續擴充 CLI 功能。
+### `cli/flags/`
 
-## 建議順序
+- `setupAccountLaunchFlags`
+- `configureFlagsByFlag`
+- `configureFlagsByAccount`
 
-1. 先做方案 1
-   - region / selector / validator 類 helper 收斂
-   - 優先減少 `launchAccount()`、`launchAll()`、flag 設定 flow 的重複
-2. 若後續還會新增更多 CLI flow，再進方案 2
-   - 建 prompt / selection pipeline
-3. 只有在 CLI 持續長大時，才進方案 3
-   - 做更明確的 menu / domain 分層
+### `cli/switcher_menu.go`
+
+- `setupSwitcher`
+
+### `cli/d2r_path_menu.go`
+
+- D2R path setup / repair flow
+- CLI 用 path picker 呼叫點
+
+## 這次合併 refactor 想解決的成本
+
+- 新增一個 CLI 規則時，不應再需要掃過大量 menu flow 才能保證一致
+- feature boundary 應該從 package 名稱就看得出來，而不是靠閱讀大量檔案才知道 responsibility
+- `common` 不應混進 feature-specific orchestration
+- `multiboxing` 與 `switcher` 各自的 domain 應有更清楚的內聚力
+
+## 建議執行方案
+
+### Phase 1：先拆 CLI，不改行為
+
+目標：讓 `main.go` 降成薄 dispatcher，先把高密度互動流程從單一大檔拆出。
+
+要做的事：
+
+- 將 `cli_feedback.go` 移為 `cli/feedback.go`
+- 抽出 `selectors.go`
+- 抽出 `validators.go`
+- 抽出 `launchers.go`
+- 抽出 `flags/` 子目錄
+- 抽出 `switcher_menu.go`
+- 抽出 `d2r_path_menu.go`
+
+完成標準：
+
+- `main.go` 主要只剩啟動與主選單 dispatch
+- CLI 行為不變
+
+### Phase 2：整理 `internal/common`
+
+目標：先確立真正跨功能共用的基礎層。
+
+要做的事：
+
+- `internal/d2r` → `internal/common/d2r`
+- `internal/config` 中保留 config model / load / save 到 `internal/common/config`
+- 將 generic process finder 移到 `internal/common/process`
+- 若有 D2R path validation，併入 `internal/common/config`
+
+注意：
+
+- `PickD2RPath` 這類 CLI UI 行為不要留在 `common`
+
+### Phase 3：整理 `internal/multiboxing`
+
+目標：讓多開相關 domain 都集中在同一個 namespace。
+
+要做的事：
+
+- `internal/account` → `internal/multiboxing/account`
+- `internal/mods` → `internal/multiboxing/mods`
+- `internal/process/launcher.go`、`window.go` → `internal/multiboxing/launcher`
+- `internal/handle/*` 併入 `internal/multiboxing/launcher`
+- 若有背景 handle monitor，抽到 `internal/multiboxing/monitor`
+
+### Phase 4：整理 imports、測試與殘餘邊界
+
+目標：清掉舊 package 路徑並確認沒有新的 boundary leakage。
+
+要做的事：
+
+- 更新所有 import
+- 清除舊 top-level package
+- 補上抽出 helper 後需要的測試
+- 跑整體測試與 build
+
+## 主要風險與處理方式
+
+### 風險 1：`config` 混有 model 與 UI
+
+- 處理：model 留 `internal/common/config`，UI picker 留 CLI
+
+### 風險 2：`process` 混有 generic 與 feature-specific 行為
+
+- 處理：只把 generic finder 留 common，其餘移到 multiboxing
+
+### 風險 3：`handle` 看起來底層，但其實不是通用 abstraction
+
+- 處理：不要為了「看起來通用」硬留獨立 package，直接併入 multiboxing launcher
+
+### 風險 4：一次搬動過大，容易在行為沒變前就把 diff 放太大
+
+- 處理：先 CLI extraction，再 package migration，避免同一步同時做結構與行為調整
+
+## 建議 branch
+
+既然這份 plan 已經被 review 並準備進入實作，應先建立獨立 branch：
+
+```text
+refactor/cli-internal-boundaries
+```
+
+這個名稱能同時表達：
+
+- CLI flow 正在拆邊界
+- `internal\` package boundary 也在重整
 
 ## 暫時不做的事
 
-- 不先重構主迴圈 dispatch
-- 不碰 handle monitor、D2R 啟動核心、視窗重命名這些目前不是問題源頭的邏輯
-- 不急著引入過重的 state machine / framework 式抽象
+- 不引入新的 framework 式 state machine
+- 不重寫 switcher 核心切窗機制
+- 不因為 package 重新命名就順手改動所有 domain API
+- 不做超過「邊界收斂」以外的 feature redesign
 
-## 下一步
+## 建議順序
 
-- 若要開始實作，建議從「抽出 region selector 與共用 selection helper」作為第一階段
-- 若這輪要正式執行 refactor，先從低風險方案開始，不要一次跨到大範圍分層
+1. 建立 `refactor/cli-internal-boundaries`
+2. 完成 CLI extraction
+3. 完成 `internal/common` migration
+4. 完成 `internal/multiboxing` migration
+5. 更新 imports、補測試、跑 build / test
+
+## 實作原則
+
+- 先搬結構，再考慮是否需要額外 API 清理
+- 每一步都盡量保持使用者可見行為不變
+- 若中途發現 `switcher` 也需要進一步再拆，再另開下一份 plan，不把這輪 scope 無限制擴大
