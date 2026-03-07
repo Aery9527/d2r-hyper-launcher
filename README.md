@@ -84,8 +84,6 @@ your-account2@example.com,your-password-here,副帳號-野蠻人(廢寶/鑲材)
 - `r`：重新讀取 `accounts.csv` 並刷新狀態
 - `q`：離開工具
 
-補充：`a` 批次啟動預設的 `launch_delay` 是 30 秒。這是我在開發測試時實際踩出來比較安全的建議值，因為如果短時間內太頻繁重複登入／關閉，Battle.net 端有機率把連線擋住；具體會擋多久不一定，但原則上就是盡量避免短時間內連線太多次。
-
 ### 6. 想看更仔細的操作說明
 
 如果你想看每個選單怎麼用、每個步驟會看到什麼畫面，請直接讀：
@@ -98,6 +96,17 @@ your-account2@example.com,your-password-here,副帳號-野蠻人(廢寶/鑲材)
 - [docs/multiboxing-technical-guide.md](docs/multiboxing-technical-guide.md)
 - [docs/switcher-technical-guide.md](docs/switcher-technical-guide.md)
 - [docs/D2R_PARAMS.md](docs/D2R_PARAMS.md)
+
+## 注意事項
+
+- 建議先把 D2R 設成「視窗化」或「無邊框視窗」
+- 首次設定搖桿切換按鍵時，建議以管理員權限執行
+- `switcher` 只有在 `d2r-hyper-launcher` 工具持續開著時才會生效；如果把工具關掉，切窗功能就會停止作用
+- `a` 批次啟動預設的 `launch_delay` 是 30 秒。這是實際測試後較安全的建議值，因為如果短時間內太頻繁重複登入／關閉，Battle.net 端有機率把連線擋住；具體會擋多久不一定，但原則上就是盡量避免短時間內連線太多次
+- 僅支援 Battle.net 版 D2R
+- 本工具為社群自用工具，與 Blizzard Entertainment 無關；使用風險自負，本作者不對任何風險、損失或後果負責
+- 操作進程 Handle 可能被部分防毒軟體誤報
+- 本工具不會修改遊戲檔案、注入遊戲程式或自動化遊戲操作
 
 ## 給想自己編譯的人
 
@@ -136,14 +145,6 @@ go build -o d2r-hyper-launcher.exe ./cmd/d2r-hyper-launcher
 .\scripts\go-test.ps1
 go build -o .\.tmp\d2r-hyper-launcher-dev.exe ./cmd/d2r-hyper-launcher
 ```
-
-## 注意事項
-
-- 建議先把 D2R 設成「視窗化」或「無邊框視窗」
-- 首次設定搖桿切換按鍵時，建議以管理員權限執行
-- 僅支援 Battle.net 版 D2R
-- 操作進程 Handle 可能被部分防毒軟體誤報
-- 本工具不會修改遊戲檔案、注入遊戲程式或自動化遊戲操作
 
 ## 授權
 
