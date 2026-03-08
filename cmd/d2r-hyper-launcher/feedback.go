@@ -92,10 +92,25 @@ func (u *cliUI) rawlnf(format string, args ...any) {
 }
 
 func (u *cliUI) headf(format string, args ...any) {
+	title := fmt.Sprintf(format, args...)
+	width := utf8.RuneCountInString(u.style.headerDivider)
+	if titleWidth := utf8.RuneCountInString(title); titleWidth < width {
+		padding := width - titleWidth
+		leftPadding := padding / 2
+		rightPadding := padding - leftPadding
+		title = strings.Repeat(" ", leftPadding) + title + strings.Repeat(" ", rightPadding)
+	}
+
 	u.headerDividerLine()
-	u.rawlnf(format, args...)
+	u.rawln(title)
 	u.headerDividerLine()
 	ui.blankLine()
+}
+
+func (u *cliUI) menuBlock(render func()) {
+	u.menuDividerLine()
+	render()
+	u.menuDividerLine()
 }
 
 func (u *cliUI) infof(format string, args ...any) {

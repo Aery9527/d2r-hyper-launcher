@@ -33,7 +33,7 @@ func TestCLIUIHeadRendersTitleBetweenDividers(t *testing.T) {
 		testUI.headf("主選單")
 	})
 
-	assert.Equal(t, "============================================\n主選單\n============================================\n\n", output)
+	assert.Equal(t, "============================================\n                    主選單                     \n============================================\n\n", output)
 }
 
 func TestCLIUIMenuDividerUsesMenuStyle(t *testing.T) {
@@ -44,6 +44,18 @@ func TestCLIUIMenuDividerUsesMenuStyle(t *testing.T) {
 	})
 
 	assert.Equal(t, "--------------------------------------------\n", output)
+}
+
+func TestCLIUIMenuBlockWrapsCallbackContentInMenuDividers(t *testing.T) {
+	testUI := newCLIUI()
+
+	output := captureStdout(t, func() {
+		testUI.menuBlock(func() {
+			testUI.option("1", "測試選項")
+		})
+	})
+
+	assert.Equal(t, "--------------------------------------------\n[1] 測試選項\n--------------------------------------------\n", output)
 }
 
 func TestCLIUISubMenuNavKeepsBackHomeQuitLast(t *testing.T) {

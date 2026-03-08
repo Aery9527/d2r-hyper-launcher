@@ -18,9 +18,11 @@ func setupSwitcher(cfg *config.Config) {
 	}
 
 	ui.blankLine()
-	ui.option("1", "設定切換按鍵")
-	ui.option("0", "關閉切換功能")
-	printSubMenuNav()
+	ui.menuBlock(func() {
+		ui.option("1", "設定切換按鍵")
+		ui.option("0", "關閉切換功能")
+		printSubMenuNav()
+	})
 	choice, ok := ui.readInput()
 	if !ok {
 		return
