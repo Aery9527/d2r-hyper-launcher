@@ -67,7 +67,7 @@ func TestCLIMenuOptionsRenderAlignsPrefixesToLongestKey(t *testing.T) {
 	options.option("0", "離線遊玩")
 
 	output := captureStdout(t, func() {
-		options.render(testUI)
+		options.render()
 	})
 
 	assert.Equal(t, "[數字] 啟動指定帳號\n[a]    啟動所有帳號\n[0]    離線遊玩\n", output)
@@ -78,14 +78,30 @@ func TestDisplayWidthTreatsCJKAsDoubleWidth(t *testing.T) {
 	assert.Equal(t, 3, displayWidth("[a]"))
 }
 
-func TestCLIUISubMenuNavKeepsBackHomeQuitLast(t *testing.T) {
+func TestCLIUISubMenuOptionsAppendsCommonNavAfterBlankLine(t *testing.T) {
 	testUI := newCLIUI()
-
-	output := captureStdout(t, func() {
-		testUI.subMenuNav()
+	options := testUI.subMenuOptions(func(options *cliMenuOptions) {
+		options.option("1", "測試選項")
 	})
 
-	assert.Contains(t, output, "\n[b] 回上一層\n[h] 回主選單\n[q] 離開程式\n")
+	output := captureStdout(t, func() {
+		options.render()
+	})
+
+	assert.Equal(t, "[1] 測試選項\n\n[b] 回上一層\n[h] 回主選單\n[q] 離開程式\n", output)
+}
+
+func TestCLIUIMainMenuOptionsAppendsQuitAfterBlankLine(t *testing.T) {
+	testUI := newCLIUI()
+	options := testUI.mainMenuOptions(func(options *cliMenuOptions) {
+		options.option("1", "測試選項")
+	})
+
+	output := captureStdout(t, func() {
+		options.render()
+	})
+
+	assert.Equal(t, "[1] 測試選項\n\n[q] 退出\n", output)
 }
 
 func TestCLIUIInputPromptUsesPromptRenderer(t *testing.T) {

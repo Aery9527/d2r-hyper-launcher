@@ -22,11 +22,11 @@ func ensureLaunchReadyD2RPathWithSetup(cfg *config.Config, setup func(*config.Co
 		ui.warningf("找不到可啟動的 D2R.exe：%s", cfg.D2RPath)
 		ui.warningf("原因：%v", err)
 		ui.promptf("請先設定正確的 D2R.exe 路徑，完成後再繼續啟動。")
-		options := ui.newMenuOptions()
-		options.option("p", "立即設定 D2R.exe 路徑")
-		options.subMenuNav()
+		options := ui.subMenuOptions(func(options *cliMenuOptions) {
+			options.option("p", "立即設定 D2R.exe 路徑")
+		})
 		ui.menuBlock(func() {
-			options.render(ui)
+			options.render()
 		})
 		input, ok := ui.readInput()
 		if !ok {

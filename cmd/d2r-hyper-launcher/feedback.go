@@ -56,6 +56,7 @@ type cliMenuEntry struct {
 }
 
 type cliMenuOptions struct {
+	ui      *cliUI
 	entries []cliMenuEntry
 }
 
@@ -148,8 +149,27 @@ func (u *cliUI) menuBlock(render func()) {
 
 func (u *cliUI) newMenuOptions() *cliMenuOptions {
 	return &cliMenuOptions{
+		ui:      u,
 		entries: make([]cliMenuEntry, 0, 8),
 	}
+}
+
+func (u *cliUI) subMenuOptions(build func(*cliMenuOptions)) *cliMenuOptions {
+	options := u.newMenuOptions()
+	if build != nil {
+		build(options)
+	}
+	options.appendSubMenuNav()
+	return options
+}
+
+func (u *cliUI) mainMenuOptions(build func(*cliMenuOptions)) *cliMenuOptions {
+	options := u.newMenuOptions()
+	if build != nil {
+		build(options)
+	}
+	options.appendQuitOption()
+	return options
 }
 
 func (u *cliUI) infof(format string, args ...any) {
@@ -221,14 +241,19 @@ func (o *cliMenuOptions) blankLine() {
 	o.entries = append(o.entries, cliMenuEntry{kind: cliMenuEntryBlank})
 }
 
-func (o *cliMenuOptions) subMenuNav() {
+func (o *cliMenuOptions) appendSubMenuNav() {
 	o.blankLine()
 	o.option(menuBack, "回上一層")
 	o.option(menuHome, "回主選單")
 	o.option(menuQuit, "離開程式")
 }
 
-func (o *cliMenuOptions) render(ui *cliUI) {
+func (o *cliMenuOptions) appendQuitOption() {
+	o.blankLine()
+	o.option(menuQuit, "退出")
+}
+
+func (o *cliMenuOptions) render() {
 	maxPrefixWidth := 0
 	for _, entry := range o.entries {
 		if entry.kind != cliMenuEntryOption {
@@ -243,11 +268,11 @@ func (o *cliMenuOptions) render(ui *cliUI) {
 	for _, entry := range o.entries {
 		switch entry.kind {
 		case cliMenuEntryBlank:
-			ui.blankLine()
+			o.ui.blankLine()
 		case cliMenuEntryOption:
 			prefix := fmt.Sprintf("[%s]", entry.key)
 			padding := strings.Repeat(" ", maxPrefixWidth-displayWidth(prefix))
-			ui.rawlnf("%s%s %s", prefix, padding, entry.label)
+			o.ui.rawlnf("%s%s %s", prefix, padding, entry.label)
 		}
 	}
 }
@@ -278,13 +303,6 @@ func (u *cliUI) menuDividerLine() {
 
 func (u *cliUI) blankLine() {
 	fmt.Println()
-}
-
-func (u *cliUI) subMenuNav() {
-	u.blankLine()
-	u.option(menuBack, "回上一層")
-	u.option(menuHome, "回主選單")
-	u.option(menuQuit, "離開程式")
 }
 
 func (u *cliUI) anyKeyContinue() error {

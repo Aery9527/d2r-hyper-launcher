@@ -29,14 +29,16 @@ description: "Handle repository-specific CLI UI and message-presentation work in
    - `headf(...)`：表示目前位於哪個環節 / section
    - `menuBlock(func(){ ... })`：表示玩家準備閱讀並輸入的一組內容
 3. `headf(...)` 會依 `headerDivider` 的顯示寬度置中，寬度計算要走 `displayWidth(...)`，不能只用 rune count。
-4. menu option 現在優先走 `newMenuOptions()` 收集，再由 `render(ui)` 依最長 prefix 對齊；混合中文與 ASCII key 時也要維持對齊。
-5. `infoLines(...)` / `warningLines(...)` / `promptLines(...)` / `successLines(...)` / `errorLines(...)` 是「同一組訊息的多段內容」，只會顯示一次 icon，後續段落縮排對齊到 icon 後方。
-6. 子選單導航固定是 `b` / `h` / `q`，且仍應保留在 submenu 的最後一組選項。
-7. CLI 輸出與輸入已收斂到 UI layer；不要在新的 call site 再散落 `fmt.Print*` 或直接操作 `scanner`。
+4. menu option 現在優先走 `newMenuOptions()` 收集，再由 `render()` 依最長 prefix 對齊；`cliMenuOptions` 會綁定建立它的 `ui`，混合中文與 ASCII key 時也要維持對齊。
+5. 若主選單需要固定的 `q` 離開選項，優先使用 `ui.mainMenuOptions(func(*cliMenuOptions))`；它會統一補上 custom options 後的空行與「退出」。
+6. 若子選單需要固定的 `b` / `h` / `q` 導航，優先使用 `ui.subMenuOptions(func(*cliMenuOptions))`；它會統一補上 custom options 後的空行與「回上一層 / 回主選單 / 離開程式」。
+7. `infoLines(...)` / `warningLines(...)` / `promptLines(...)` / `successLines(...)` / `errorLines(...)` 是「同一組訊息的多段內容」，只會顯示一次 icon，後續段落縮排對齊到 icon 後方。
+8. 子選單導航固定是 `b` / `h` / `q`，且仍應保留在 submenu 的最後一組選項。
+9. CLI 輸出與輸入已收斂到 UI layer；不要在新的 call site 再散落 `fmt.Print*` 或直接操作 `scanner`。
 
 ## 修改時要守住的規則
 
-- 想調整玩家可見訊息時，優先找 `ui.infof(...)`、`ui.warningf(...)`、`ui.promptf(...)`、`ui.headf(...)`、`ui.menuBlock(...)`、`ui.newMenuOptions()`；不要直接拼接裸輸出。
+- 想調整玩家可見訊息時，優先找 `ui.infof(...)`、`ui.warningf(...)`、`ui.promptf(...)`、`ui.headf(...)`、`ui.menuBlock(...)`、`ui.newMenuOptions()`、`ui.mainMenuOptions(...)`、`ui.subMenuOptions(...)`；不要直接拼接裸輸出。
 - 若訊息是同一組公告 / 說明的多段內容，優先用 `*Lines(...)` helper，不要手動塞 `\n` 後又重複 icon。
 - 若需要 option 對齊，先把選項收進 `cliMenuOptions`，不要一邊 `ui.option(...)` 一邊猜最長寬度。
 - 若涉及全形字、中文 key、或 icon 對齊，使用 `displayWidth(...)` 邏輯；不要回退成 `utf8.RuneCountInString(...)`。
@@ -54,8 +56,9 @@ description: "Handle repository-specific CLI UI and message-presentation work in
 ### 調整主選單 / 子選單排版
 
 1. 先看 `printMenu()` 或對應 `cli_*.go` flow
-2. 用 `newMenuOptions()` 收集所有選項，再 `render(ui)`
-3. 導覽選項仍放最後，必要時呼叫 `subMenuNav()`
+2. 主選單若最後要帶固定離開選項，優先用 `ui.mainMenuOptions(func(options *cliMenuOptions) { ... })`
+3. 其他一般 menu 用 `newMenuOptions()` 收集所有選項，再 `render()`
+4. 若是子選單，優先用 `ui.subMenuOptions(func(options *cliMenuOptions) { ... })`，讓 UI layer 自動補上空行與固定導覽選項
 
 ### 調整錯誤 / 提示 / confirm 顯示
 

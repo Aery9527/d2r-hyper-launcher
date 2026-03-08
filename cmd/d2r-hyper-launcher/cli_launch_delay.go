@@ -12,11 +12,12 @@ func setupLaunchDelay(cfg *config.Config) {
 	ui.headf("啟動間隔設定")
 	ui.infof("目前設定：%s", cfg.LaunchDelay.DisplayString())
 	ui.infof("說明：這會影響主選單 [a]「啟動所有帳號」時，每個帳號之間的等待秒數。")
+	options := ui.subMenuOptions(nil)
 	ui.menuBlock(func() {
 		ui.infof("固定下限：%d 秒", config.MinLaunchDelaySeconds)
 		ui.promptf("可輸入固定秒數，例如：30")
 		ui.promptf("也可輸入隨機範圍，例如：30-60")
-		printSubMenuNav()
+		options.render()
 	})
 	input, ok := ui.readInputf("請輸入新的秒數或範圍：")
 	if !ok {

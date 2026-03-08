@@ -37,28 +37,23 @@ func printMenu(accounts []account.Account, cfg *config.Config) {
 		if process.FindWindowByTitle(d2r.WindowTitle(acc.DisplayName)) {
 			status = "已啟動"
 		}
-		ui.rawlnf("[%d] <%s> %-15s (%s)  ", i+1, status, acc.DisplayName, acc.Email)
+		ui.rawlnf("[%d] <%s> %-15s (%s) ", i+1, status, acc.DisplayName, acc.Email)
 	}
 
 	ui.blankLine()
-	options := ui.newMenuOptions()
-	options.option("數字", "啟動指定帳號")
-	options.option("0", "離線遊玩（可選 mod，不需帳密）")
-	options.option("a", "啟動所有帳號（可選 mod，只啟動未啟動的）")
-	options.option("d", fmt.Sprintf("設定啟動間隔（目前：%s）", cfg.LaunchDelay.DisplayString()))
-	options.option("f", "設定帳號啟動 flag")
-	options.option("p", "選擇 D2R.exe 路徑")
-	options.option("s", switcherMenuOptionLabel(cfg))
-	options.option("r", "重新整理狀態")
-	options.blankLine()
-	options.option(menuQuit, "退出")
-	ui.menuBlock(func() {
-		options.render(ui)
+	options := ui.mainMenuOptions(func(options *cliMenuOptions) {
+		options.option("數字", "啟動指定帳號")
+		options.option("0", "離線遊玩（可選 mod，不需帳密）")
+		options.option("a", "啟動所有帳號（可選 mod，只啟動未啟動的）")
+		options.option("d", fmt.Sprintf("設定啟動間隔（目前：%s）", cfg.LaunchDelay.DisplayString()))
+		options.option("f", "設定帳號啟動 flag")
+		options.option("p", "選擇 D2R.exe 路徑")
+		options.option("s", switcherMenuOptionLabel(cfg))
+		options.option("r", "重新整理狀態")
 	})
-}
-
-func printSubMenuNav() {
-	ui.subMenuNav()
+	ui.menuBlock(func() {
+		options.render()
+	})
 }
 
 func switcherMenuOptionLabel(cfg *config.Config) string {
