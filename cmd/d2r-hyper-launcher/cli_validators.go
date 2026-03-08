@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"sort"
 	"strconv"
@@ -88,12 +87,12 @@ func normalizeLaunchFlags(flags uint32, changedMask uint32) uint32 {
 	return flags
 }
 
-func confirmChanges(scanner *bufio.Scanner) bool {
-	fmt.Print("  > 確認套用？(Y/n)：")
-	if !scanner.Scan() {
+func confirmChanges() bool {
+	answer, ok := ui.readInputf("確認套用？([Y]/[n])：")
+	if !ok {
 		return false
 	}
-	answer := strings.ToLower(strings.TrimSpace(scanner.Text()))
+	answer = strings.ToLower(answer)
 	return answer == "" || answer == "y"
 }
 

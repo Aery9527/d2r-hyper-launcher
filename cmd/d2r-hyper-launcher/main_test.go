@@ -100,6 +100,16 @@ func TestBatchAccountStatusLinesShowsRunningAndPendingAccounts(t *testing.T) {
 	}, lines)
 }
 
+func TestPrintMenuKeepsChoicePromptInsideOptionGroup(t *testing.T) {
+	output := captureStdout(t, func() {
+		printMenu(nil)
+	})
+
+	assert.Contains(t, output, "--------------------------------------------\n[數字] 啟動指定帳號\n[0] 離線遊玩（可選 mod，不需帳密）")
+	assert.Contains(t, output, "[q] 退出\n")
+	assert.NotContains(t, output, "? 請選擇：")
+}
+
 func TestFormatLaunchDelayMessage(t *testing.T) {
 	assert.Equal(t, "  等待 30 秒後啟動下一個帳號：VoidLife", formatLaunchDelayMessage(30, "VoidLife"))
 }
@@ -156,9 +166,9 @@ func TestWaitForNextBatchLaunchReportsRemainingEveryFiveSeconds(t *testing.T) {
 		waitForNextBatchLaunch(12, "VoidLife")
 	})
 
-	assert.Contains(t, output, "  等待 12 秒後啟動下一個帳號：VoidLife")
-	assert.Contains(t, output, "  還剩 7 秒後啟動下一個帳號：VoidLife")
-	assert.Contains(t, output, "  還剩 2 秒後啟動下一個帳號：VoidLife")
+	assert.Contains(t, output, "• 等待 12 秒後啟動下一個帳號：VoidLife")
+	assert.Contains(t, output, "• 還剩 7 秒後啟動下一個帳號：VoidLife")
+	assert.Contains(t, output, "• 還剩 2 秒後啟動下一個帳號：VoidLife")
 	assert.Equal(t, []time.Duration{5 * time.Second, 5 * time.Second, 2 * time.Second}, sleeps)
 }
 
@@ -173,14 +183,14 @@ func TestEnsureLaunchReadyD2RPathWithSetupAcceptsExistingPath(t *testing.T) {
 
 	cfg := &config.Config{D2RPath: d2rPath}
 	called := false
-	scanner := bufio.NewScanner(strings.NewReader(""))
+	withTestInput(t, "", func() {
+		ok := ensureLaunchReadyD2RPathWithSetup(cfg, func(*config.Config) bool {
+			called = true
+			return true
+		})
 
-	ok := ensureLaunchReadyD2RPathWithSetup(cfg, scanner, func(*config.Config) bool {
-		called = true
-		return true
+		assert.True(t, ok)
 	})
-
-	assert.True(t, ok)
 	assert.False(t, called)
 }
 
@@ -190,27 +200,27 @@ func TestEnsureLaunchReadyD2RPathWithSetupRunsPathSetup(t *testing.T) {
 	assert.NoError(t, os.WriteFile(validPath, []byte("binary"), 0o600))
 
 	cfg := &config.Config{D2RPath: filepath.Join(tmpDir, "missing", "D2R.exe")}
-	scanner := bufio.NewScanner(strings.NewReader("p\n"))
+	withTestInput(t, "p\n", func() {
+		ok := ensureLaunchReadyD2RPathWithSetup(cfg, func(cfg *config.Config) bool {
+			cfg.D2RPath = validPath
+			return true
+		})
 
-	ok := ensureLaunchReadyD2RPathWithSetup(cfg, scanner, func(cfg *config.Config) bool {
-		cfg.D2RPath = validPath
-		return true
+		assert.True(t, ok)
 	})
-
-	assert.True(t, ok)
 	assert.Equal(t, validPath, cfg.D2RPath)
 }
 
 func TestEnsureLaunchReadyD2RPathWithSetupAllowsBackNavigation(t *testing.T) {
 	cfg := &config.Config{D2RPath: `C:\missing\D2R.exe`}
-	scanner := bufio.NewScanner(strings.NewReader("b\n"))
+	withTestInput(t, "b\n", func() {
+		ok := ensureLaunchReadyD2RPathWithSetup(cfg, func(*config.Config) bool {
+			t.Fatal("setup should not be called")
+			return false
+		})
 
-	ok := ensureLaunchReadyD2RPathWithSetup(cfg, scanner, func(*config.Config) bool {
-		t.Fatal("setup should not be called")
-		return false
+		assert.False(t, ok)
 	})
-
-	assert.False(t, ok)
 }
 
 func TestParseSelectionInput(t *testing.T) {
@@ -264,63 +274,63 @@ func TestPrintAccountLaunchFlagSummary(t *testing.T) {
 }
 
 func TestShowInputErrorAndPause(t *testing.T) {
-	originalSleep := cliInputErrorPauseSleep
-	originalStep := cliInputErrorPauseStep
-	originalCount := cliInputErrorPauseCount
+	originalWaitForAnyKey := ui.waitForAnyKey
+	originalCanSingleKeyContinue := ui.canSingleKeyContinue
 	t.Cleanup(func() {
-		cliInputErrorPauseSleep = originalSleep
-		cliInputErrorPauseStep = originalStep
-		cliInputErrorPauseCount = originalCount
+		ui.waitForAnyKey = originalWaitForAnyKey
+		ui.canSingleKeyContinue = originalCanSingleKeyContinue
 	})
 
-	var sleeps []time.Duration
-	cliInputErrorPauseStep = 10 * time.Millisecond
-	cliInputErrorPauseCount = 6
-	cliInputErrorPauseSleep = func(d time.Duration) {
-		sleeps = append(sleeps, d)
+	waitCalled := 0
+	ui.canSingleKeyContinue = func() bool { return true }
+	ui.waitForAnyKey = func() error {
+		waitCalled++
+		return nil
 	}
 
 	output := captureStdout(t, func() {
 		showInputErrorAndPause(`解析失敗：區間 "1-4" 超出可選範圍 1-2`)
 	})
 
-	assert.Contains(t, output, `解析失敗：區間 "1-4" 超出可選範圍 1-2`)
-	assert.Contains(t, output, "\r  .")
-	assert.Contains(t, output, "\r  ..")
-	assert.Contains(t, output, "\r  ...")
-	assert.Contains(t, output, "\r  ....")
-	assert.Contains(t, output, "\r  .....")
-	assert.Contains(t, output, "\r  ......")
-	assert.Equal(t, []time.Duration{
-		10 * time.Millisecond,
-		10 * time.Millisecond,
-		10 * time.Millisecond,
-		10 * time.Millisecond,
-		10 * time.Millisecond,
-		10 * time.Millisecond,
-	}, sleeps)
+	assert.Contains(t, output, `✘ 解析失敗：區間 "1-4" 超出可選範圍 1-2`)
+	assert.Contains(t, output, "? 請按任意鍵繼續...")
+	assert.Equal(t, 1, waitCalled)
 }
 
 func TestShowInvalidInputAndPause(t *testing.T) {
-	originalSleep := cliInputErrorPauseSleep
-	originalStep := cliInputErrorPauseStep
-	originalCount := cliInputErrorPauseCount
+	originalWaitForAnyKey := ui.waitForAnyKey
+	originalCanSingleKeyContinue := ui.canSingleKeyContinue
 	t.Cleanup(func() {
-		cliInputErrorPauseSleep = originalSleep
-		cliInputErrorPauseStep = originalStep
-		cliInputErrorPauseCount = originalCount
+		ui.waitForAnyKey = originalWaitForAnyKey
+		ui.canSingleKeyContinue = originalCanSingleKeyContinue
 	})
 
-	cliInputErrorPauseStep = 1 * time.Millisecond
-	cliInputErrorPauseCount = 1
-	cliInputErrorPauseSleep = func(time.Duration) {}
+	ui.canSingleKeyContinue = func() bool { return true }
+	ui.waitForAnyKey = func() error { return nil }
 
 	output := captureStdout(t, func() {
 		showInvalidInputAndPause()
 	})
 
-	assert.Contains(t, output, "無效輸入，請重試。")
-	assert.Contains(t, output, "\r  .")
+	assert.Contains(t, output, "✘ 無效輸入，請重試。")
+	assert.Contains(t, output, "? 請按任意鍵繼續...")
+}
+
+func TestShowInputErrorAndPauseFallsBackToEnterWhenSingleKeyUnavailable(t *testing.T) {
+	originalCanSingleKeyContinue := ui.canSingleKeyContinue
+	t.Cleanup(func() {
+		ui.canSingleKeyContinue = originalCanSingleKeyContinue
+	})
+
+	ui.canSingleKeyContinue = func() bool { return false }
+	output := captureStdout(t, func() {
+		withTestInput(t, "\n", func() {
+			showInputErrorAndPause("無效輸入，請重試。")
+		})
+	})
+
+	assert.Contains(t, output, "✘ 無效輸入，請重試。")
+	assert.Contains(t, output, "? 請按 Enter 繼續...")
 }
 
 func captureStdout(t *testing.T, fn func()) string {
@@ -344,4 +354,22 @@ func captureStdout(t *testing.T, fn func()) string {
 	output := <-done
 	assert.NoError(t, r.Close())
 	return output
+}
+
+func withTestInput(t *testing.T, input string, fn func()) {
+	t.Helper()
+
+	originalReadLine := ui.readLine
+	scanner := bufio.NewScanner(strings.NewReader(input))
+	ui.readLine = func() (string, bool) {
+		if !scanner.Scan() {
+			return "", false
+		}
+		return strings.TrimSpace(scanner.Text()), true
+	}
+	defer func() {
+		ui.readLine = originalReadLine
+	}()
+
+	fn()
 }

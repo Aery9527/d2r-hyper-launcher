@@ -1,9 +1,9 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
 
 	"d2rhl/internal/common/config"
@@ -16,24 +16,26 @@ import (
 var launchDelayRandIntN = rand.Intn
 var launchDelaySleep = time.Sleep
 
-func launchAccount(acc *account.Account, cfg *config.Config, scanner *bufio.Scanner) {
-	if !ensureLaunchReadyD2RPath(cfg, scanner) {
+func launchAccount(acc *account.Account, cfg *config.Config) {
+	if !ensureLaunchReadyD2RPath(cfg) {
 		return
 	}
 	if isAccountRunning(acc.DisplayName) {
-		fmt.Printf("  ⏭ %s 已在執行中，請先切回既有視窗或改用其他帳號。\n", acc.DisplayName)
-		fmt.Println()
+		ui.warningf("%s 已在執行中，請先切回既有視窗或改用其他帳號。", acc.DisplayName)
+		ui.blankLine()
 		return
 	}
 
-	fmt.Println()
-	fmt.Println("  選擇區域 (1=NA, 2=EU, 3=Asia)")
+	ui.blankLine()
+	ui.infof("選擇區域")
+	ui.option("1", "NA")
+	ui.option("2", "EU")
+	ui.option("3", "Asia")
 	printSubMenuNav()
-	fmt.Print("  > 請選擇：")
-	if !scanner.Scan() {
+	input, ok := ui.readInput()
+	if !ok {
 		return
 	}
-	input := scanner.Text()
 	if nav := isMenuNav(input); nav != "" {
 		return
 	}
@@ -43,63 +45,65 @@ func launchAccount(acc *account.Account, cfg *config.Config, scanner *bufio.Scan
 		return
 	}
 
-	modArgs, ok := selectLaunchMod(cfg.D2RPath, scanner)
+	modArgs, ok := selectLaunchMod(cfg.D2RPath)
 	if !ok {
 		return
 	}
 
 	password, err := account.GetDecryptedPassword(acc)
 	if err != nil {
-		fmt.Printf("  密碼解密失敗：%v\n", err)
+		ui.errorf("密碼解密失敗：%v", err)
 		return
 	}
 
-	fmt.Printf("  正在啟動 %s (%s)...\n", acc.DisplayName, region.Name)
+	ui.infof("正在啟動 %s (%s)...", acc.DisplayName, region.Name)
 	pid, err := launcher.LaunchD2R(cfg.D2RPath, acc.Email, password, region.Address, accountLaunchArgs(*acc, modArgs)...)
 	if err != nil {
-		fmt.Printf("  啟動失敗：%v\n", err)
+		ui.errorf("啟動失敗：%v", err)
 		return
 	}
-	fmt.Printf("  ✔ D2R 已啟動 (PID: %d)\n", pid)
+	ui.successf("D2R 已啟動 (PID: %d)", pid)
 
 	time.Sleep(2 * time.Second)
 	closed, err := launcher.CloseHandlesByName(pid, d2r.SingleInstanceEventName)
 	if err != nil {
-		fmt.Printf("  ⚠ 關閉 Handle 失敗：%v\n", err)
+		ui.warningf("關閉 Handle 失敗：%v", err)
 	} else if closed > 0 {
-		fmt.Printf("  ✔ 已關閉 %d 個 Event Handle\n", closed)
+		ui.successf("已關閉 %d 個 Event Handle", closed)
 	}
 
 	renameLaunchedWindow(pid, acc.DisplayName)
-	fmt.Println()
+	ui.blankLine()
 }
 
-func launchAll(accounts []account.Account, cfg *config.Config, scanner *bufio.Scanner) {
-	if !ensureLaunchReadyD2RPath(cfg, scanner) {
+func launchAll(accounts []account.Account, cfg *config.Config) {
+	if !ensureLaunchReadyD2RPath(cfg) {
 		return
 	}
 
 	runningTitles := runningAccountWindowTitles()
 	pendingAccounts := pendingBatchAccounts(accounts, runningTitles)
-	fmt.Println("  已預先掃描目前執行中的 D2R 視窗：")
+	ui.infof("已預先掃描目前執行中的 D2R 視窗：")
 	for _, line := range batchAccountStatusLines(accounts, runningTitles) {
-		fmt.Println(line)
+		ui.rawln(line)
 	}
 	if len(pendingAccounts) == 0 {
-		fmt.Println("  所有帳號都已在執行中。")
-		fmt.Println()
+		ui.infof("所有帳號都已在執行中。")
+		ui.blankLine()
 		return
 	}
-	fmt.Printf("  本次只會啟動上面標示為 [未啟動] 的帳號，共 %d 個。\n", len(pendingAccounts))
+	ui.infof("本次只會啟動上面標示為 [未啟動] 的帳號，共 %d 個。", len(pendingAccounts))
 
-	fmt.Println()
-	fmt.Println("  選擇區域 (1=NA, 2=EU, 3=Asia)")
+	ui.blankLine()
+	ui.infof("選擇區域")
+	ui.option("1", "NA")
+	ui.option("2", "EU")
+	ui.option("3", "Asia")
 	printSubMenuNav()
-	fmt.Print("  > 請選擇：")
-	if !scanner.Scan() {
+	input, ok := ui.readInput()
+	if !ok {
 		return
 	}
-	input := scanner.Text()
 	if nav := isMenuNav(input); nav != "" {
 		return
 	}
@@ -109,7 +113,7 @@ func launchAll(accounts []account.Account, cfg *config.Config, scanner *bufio.Sc
 		return
 	}
 
-	modArgs, ok := selectLaunchMod(cfg.D2RPath, scanner)
+	modArgs, ok := selectLaunchMod(cfg.D2RPath)
 	if !ok {
 		return
 	}
@@ -117,24 +121,24 @@ func launchAll(accounts []account.Account, cfg *config.Config, scanner *bufio.Sc
 	for i, acc := range pendingAccounts {
 		password, err := account.GetDecryptedPassword(acc)
 		if err != nil {
-			fmt.Printf("  ⚠ 帳號 %s 密碼解密失敗：%v\n", acc.DisplayName, err)
+			ui.warningf("帳號 %s 密碼解密失敗：%v", acc.DisplayName, err)
 			continue
 		}
 
-		fmt.Printf("  正在啟動 %s (%s)...\n", acc.DisplayName, region.Name)
+		ui.infof("正在啟動 %s (%s)...", acc.DisplayName, region.Name)
 		pid, err := launcher.LaunchD2R(cfg.D2RPath, acc.Email, password, region.Address, accountLaunchArgs(*acc, modArgs)...)
 		if err != nil {
-			fmt.Printf("  ⚠ 帳號 %s 啟動失敗：%v\n", acc.DisplayName, err)
+			ui.warningf("帳號 %s 啟動失敗：%v", acc.DisplayName, err)
 			continue
 		}
-		fmt.Printf("  ✔ %s 已啟動 (PID: %d)\n", acc.DisplayName, pid)
+		ui.successf("%s 已啟動 (PID: %d)", acc.DisplayName, pid)
 
 		time.Sleep(3 * time.Second)
 		closed, err := launcher.CloseHandlesByName(pid, d2r.SingleInstanceEventName)
 		if err != nil {
-			fmt.Printf("  ⚠ %s Handle 關閉失敗：%v\n", acc.DisplayName, err)
+			ui.warningf("%s Handle 關閉失敗：%v", acc.DisplayName, err)
 		} else if closed > 0 {
-			fmt.Printf("  ✔ %s 已關閉 %d 個 Handle\n", acc.DisplayName, closed)
+			ui.successf("%s 已關閉 %d 個 Handle", acc.DisplayName, closed)
 		}
 
 		renameLaunchedWindow(pid, acc.DisplayName)
@@ -144,30 +148,30 @@ func launchAll(accounts []account.Account, cfg *config.Config, scanner *bufio.Sc
 			waitForNextBatchLaunch(delaySeconds, pendingAccounts[i+1].DisplayName)
 		}
 	}
-	fmt.Println()
+	ui.blankLine()
 }
 
-func launchOffline(cfg *config.Config, scanner *bufio.Scanner) {
-	if !ensureLaunchReadyD2RPath(cfg, scanner) {
+func launchOffline(cfg *config.Config) {
+	if !ensureLaunchReadyD2RPath(cfg) {
 		return
 	}
 
-	fmt.Println()
-	fmt.Println("  === 離線遊玩模式 ===")
+	ui.blankLine()
+	ui.infof("=== 離線遊玩模式 ===")
 
-	modArgs, ok := selectLaunchMod(cfg.D2RPath, scanner)
+	modArgs, ok := selectLaunchMod(cfg.D2RPath)
 	if !ok {
 		return
 	}
 
-	fmt.Println("  正在啟動 D2R（離線模式）...")
+	ui.infof("正在啟動 D2R（離線模式）...")
 	pid, err := launcher.LaunchD2ROffline(cfg.D2RPath, modArgs...)
 	if err != nil {
-		fmt.Printf("  啟動失敗：%v\n", err)
+		ui.errorf("啟動失敗：%v", err)
 		return
 	}
-	fmt.Printf("  ✔ D2R 已啟動 (PID: %d)\n", pid)
-	fmt.Println()
+	ui.successf("D2R 已啟動 (PID: %d)", pid)
+	ui.blankLine()
 }
 
 func accountLaunchArgs(acc account.Account, modArgs []string) []string {
@@ -178,14 +182,14 @@ func accountLaunchArgs(acc account.Account, modArgs []string) []string {
 }
 
 func renameLaunchedWindow(pid uint32, displayName string) {
-	fmt.Printf("  正在準備重命名視窗：%s\n", displayName)
+	ui.infof("正在準備重命名視窗：%s", displayName)
 	err := process.RenameWindow(pid, d2r.WindowTitle(displayName), 15, 2*time.Second)
 	if err != nil {
-		fmt.Printf("  ⚠ 視窗重命名失敗 (%s)：%v\n", displayName, err)
+		ui.warningf("視窗重命名失敗 (%s)：%v", displayName, err)
 		return
 	}
 
-	fmt.Printf("  ✔ 視窗已重命名為 \"%s\"\n", d2r.WindowTitle(displayName))
+	ui.successf("視窗已重命名為 %q", d2r.WindowTitle(displayName))
 }
 
 func runningAccountWindowTitles() map[string]bool {
@@ -248,7 +252,7 @@ func waitForNextBatchLaunch(delaySeconds int, nextDisplayName string) {
 		return
 	}
 
-	fmt.Println(formatLaunchDelayMessage(delaySeconds, nextDisplayName))
+	ui.infof("%s", strings.TrimSpace(formatLaunchDelayMessage(delaySeconds, nextDisplayName)))
 	remainingSeconds := delaySeconds
 	for remainingSeconds > 0 {
 		stepSeconds := 5
@@ -259,7 +263,7 @@ func waitForNextBatchLaunch(delaySeconds int, nextDisplayName string) {
 		launchDelaySleep(time.Duration(stepSeconds) * time.Second)
 		remainingSeconds -= stepSeconds
 		if remainingSeconds > 0 {
-			fmt.Println(formatLaunchDelayRemainingMessage(remainingSeconds, nextDisplayName))
+			ui.infof("%s", strings.TrimSpace(formatLaunchDelayRemainingMessage(remainingSeconds, nextDisplayName)))
 		}
 	}
 }

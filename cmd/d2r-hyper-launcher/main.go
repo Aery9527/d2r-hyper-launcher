@@ -1,14 +1,12 @@
 package main
 
 import (
-	"bufio"
-	"fmt"
-	"os"
 	"strconv"
 	"strings"
 
 	"d2rhl/internal/common/config"
 	"d2rhl/internal/multiboxing/account"
+	"d2rhl/internal/multiboxing/launcher"
 	"d2rhl/internal/multiboxing/monitor"
 	"d2rhl/internal/switcher"
 
@@ -29,39 +27,43 @@ func main() {
 	_ = windows.SetConsoleCP(65001)
 	_ = windows.SetConsoleOutputCP(65001)
 
-	fmt.Println("============================================")
-	fmt.Printf("  d2r-hyper-launcher  %s\n", displayVersion(version))
-	fmt.Println("============================================")
-	fmt.Println()
+	launcher.SetCommandLogger(func(message string) {
+		ui.rawln(message)
+	})
+
+	ui.rawln("============================================")
+	ui.rawlnf("  d2r-hyper-launcher  %s", displayVersion(version))
+	ui.rawln("============================================")
+	ui.blankLine()
 
 	cfg, err := config.Load()
 	if err != nil {
-		fmt.Printf("  設定檔載入失敗：%v\n", err)
+		ui.errorf("設定檔載入失敗：%v", err)
 		return
 	}
 	cfgDir, _ := config.Dir()
-	fmt.Printf("  資料目錄：%s\n", cfgDir)
-	fmt.Printf("  D2R 路徑：%s\n", cfg.D2RPath)
-	fmt.Printf("  啟動間隔：%s\n", cfg.LaunchDelay.DisplayString())
+	ui.infof("資料目錄：%s", cfgDir)
+	ui.infof("D2R 路徑：%s", cfg.D2RPath)
+	ui.infof("啟動間隔：%s", cfg.LaunchDelay.DisplayString())
 
 	if cfg.Switcher != nil && cfg.Switcher.Enabled {
 		if err := switcher.Start(cfg.Switcher); err != nil {
-			fmt.Printf("  ⚠ 視窗切換啟動失敗：%v\n", err)
+			ui.warningf("視窗切換啟動失敗：%v", err)
 		} else {
-			fmt.Printf("  ✔ 視窗切換已啟用：%s\n", switcher.FormatSwitcherDisplay(cfg.Switcher.Modifiers, cfg.Switcher.Key, cfg.Switcher.GamepadIndex))
+			ui.successf("視窗切換已啟用：%s", switcher.FormatSwitcherDisplay(cfg.Switcher.Modifiers, cfg.Switcher.Key, cfg.Switcher.GamepadIndex))
 		}
 	}
-	fmt.Println()
+	ui.blankLine()
 
 	accountsFile, err := config.AccountsPath()
 	if err != nil {
-		fmt.Printf("  無法取得帳號檔案路徑：%v\n", err)
+		ui.errorf("無法取得帳號檔案路徑：%v", err)
 		return
 	}
 
 	createdAccountsFile, err := account.EnsureAccountsFile(accountsFile)
 	if err != nil {
-		fmt.Printf("  建立帳號檔案失敗：%v\n", err)
+		ui.errorf("建立帳號檔案失敗：%v", err)
 		return
 	}
 	if createdAccountsFile {
@@ -71,59 +73,57 @@ func main() {
 
 	accounts, err := account.LoadAccounts(accountsFile)
 	if err != nil {
-		fmt.Printf("  讀取帳號失敗：%v\n", err)
+		ui.errorf("讀取帳號失敗：%v", err)
 		return
 	}
 
 	changed, err := account.EncryptPlaintextPasswords(accountsFile, accounts)
 	if err != nil {
-		fmt.Printf("  密碼加密失敗：%v\n", err)
+		ui.errorf("密碼加密失敗：%v", err)
 		return
 	}
 	if changed {
-		fmt.Println("  ✔ 已加密明文密碼並回寫至 CSV")
+		ui.successf("已加密明文密碼並回寫至 CSV")
 	}
 
 	monitor.StartHandleMonitor()
 
-	scanner := bufio.NewScanner(os.Stdin)
 	for {
 		printMenu(accounts)
-		fmt.Print("  > 請選擇：")
-		if !scanner.Scan() {
+		input, ok := ui.readInput()
+		if !ok {
 			break
 		}
 
-		input := strings.TrimSpace(scanner.Text())
 		switch strings.ToLower(input) {
 		case menuQuit:
 			switcher.Stop()
-			fmt.Println("  再見！")
+			ui.infof("再見！")
 			return
 		case "r":
 			accounts, err = account.LoadAccounts(accountsFile)
 			if err != nil {
-				fmt.Printf("  讀取帳號失敗：%v\n", err)
+				ui.errorf("讀取帳號失敗：%v", err)
 			}
 		case "0":
-			launchOffline(cfg, scanner)
+			launchOffline(cfg)
 		case "a":
-			launchAll(accounts, cfg, scanner)
+			launchAll(accounts, cfg)
 		case "d":
-			setupLaunchDelay(cfg, scanner)
+			setupLaunchDelay(cfg)
 		case "p":
 			setupD2RPath(cfg)
 		case "s":
-			setupSwitcher(cfg, scanner)
+			setupSwitcher(cfg)
 		case "f":
-			setupAccountLaunchFlags(accounts, accountsFile, scanner)
+			setupAccountLaunchFlags(accounts, accountsFile)
 		default:
 			id, err := strconv.Atoi(input)
 			if err != nil || id < 1 || id > len(accounts) {
 				showInvalidInputAndPause()
 				continue
 			}
-			launchAccount(&accounts[id-1], cfg, scanner)
+			launchAccount(&accounts[id-1], cfg)
 		}
 	}
 }

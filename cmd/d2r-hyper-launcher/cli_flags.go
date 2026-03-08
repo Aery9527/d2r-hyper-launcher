@@ -1,34 +1,30 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"strconv"
-	"strings"
 
 	"d2rhl/internal/multiboxing/account"
 )
 
-func setupAccountLaunchFlags(accounts []account.Account, accountsFile string, scanner *bufio.Scanner) {
+func setupAccountLaunchFlags(accounts []account.Account, accountsFile string) {
 	if len(accounts) == 0 {
-		fmt.Println("  目前沒有可設定的帳號。")
-		fmt.Println()
+		ui.infof("目前沒有可設定的帳號。")
+		ui.blankLine()
 		return
 	}
 
-	fmt.Println()
-	fmt.Println("  === 帳號啟動 flag 設定 ===")
+	ui.blankLine()
+	ui.infof("=== 帳號啟動 flag 設定 ===")
 	printAccountLaunchFlagSummary(accounts)
-	fmt.Println()
-	fmt.Println("  [1] 設定 flag")
-	fmt.Println("  [2] 取消 flag")
+	ui.blankLine()
+	ui.option("1", "設定 flag")
+	ui.option("2", "取消 flag")
 	printSubMenuNav()
-	fmt.Print("  > 請選擇：")
-
-	if !scanner.Scan() {
+	choice, ok := ui.readInput()
+	if !ok {
 		return
 	}
-	choice := strings.TrimSpace(scanner.Text())
 	if isMenuNav(choice) != "" {
 		return
 	}
@@ -47,43 +43,39 @@ func setupAccountLaunchFlags(accounts []account.Account, accountsFile string, sc
 		return
 	}
 
-	fmt.Println()
-	fmt.Printf("  這次要如何%s flag？\n", actionLabel)
-	fmt.Println("  [1] 以 flag 為維度")
-	fmt.Println("  [2] 以帳號為維度")
+	ui.blankLine()
+	ui.promptf("這次要如何%s flag？", actionLabel)
+	ui.option("1", "以 flag 為維度")
+	ui.option("2", "以帳號為維度")
 	printSubMenuNav()
-	fmt.Print("  > 請選擇：")
-
-	if !scanner.Scan() {
+	modeChoice, ok := ui.readInput()
+	if !ok {
 		return
 	}
-	modeChoice := strings.TrimSpace(scanner.Text())
 	if isMenuNav(modeChoice) != "" {
 		return
 	}
 
 	switch modeChoice {
 	case "1":
-		configureFlagsByFlag(accounts, accountsFile, scanner, setMode)
+		configureFlagsByFlag(accounts, accountsFile, setMode)
 	case "2":
-		configureFlagsByAccount(accounts, accountsFile, scanner, setMode)
+		configureFlagsByAccount(accounts, accountsFile, setMode)
 	default:
 		showInvalidInputAndPause()
 	}
 }
 
-func configureFlagsByFlag(accounts []account.Account, accountsFile string, scanner *bufio.Scanner, setMode bool) {
+func configureFlagsByFlag(accounts []account.Account, accountsFile string, setMode bool) {
 	options := account.LaunchFlagOptions()
-	fmt.Println()
-	fmt.Println("  可用 flag：")
+	ui.blankLine()
+	ui.infof("可用 flag：")
 	printLaunchFlagOptions(options)
 	printSubMenuNav()
-	fmt.Print("  > 請選擇 flag 編號：")
-
-	if !scanner.Scan() {
+	input, ok := ui.readInputf("請選擇 flag 編號：")
+	if !ok {
 		return
 	}
-	input := strings.TrimSpace(scanner.Text())
 	if isMenuNav(input) != "" {
 		return
 	}
@@ -96,16 +88,14 @@ func configureFlagsByFlag(accounts []account.Account, accountsFile string, scann
 
 	option := options[selected-1]
 	actionLabel := flagActionLabel(setMode)
-	fmt.Println()
-	fmt.Printf("  請輸入要%s「%s」的帳號編號，可用 2,4,6 或 1-3,5-7：\n", actionLabel, option.Name)
+	ui.blankLine()
+	ui.promptf("請輸入要%s「%s」的帳號編號，可用 2,4,6 或 1-3,5-7：", actionLabel, option.Name)
 	printAccountLaunchFlagSummary(accounts)
 	printSubMenuNav()
-	fmt.Print("  > 請輸入：")
-
-	if !scanner.Scan() {
+	input, ok = ui.readInputf("請輸入：")
+	if !ok {
 		return
 	}
-	input = strings.TrimSpace(scanner.Text())
 	if isMenuNav(input) != "" {
 		return
 	}
@@ -116,15 +106,15 @@ func configureFlagsByFlag(accounts []account.Account, accountsFile string, scann
 		return
 	}
 
-	fmt.Println()
-	fmt.Printf("  即將%s以下帳號的 flag「%s」：\n", actionLabel, option.Name)
+	ui.blankLine()
+	ui.infof("即將%s以下帳號的 flag「%s」：", actionLabel, option.Name)
 	for _, idx := range accountIndexes {
 		acc := accounts[idx]
-		fmt.Printf("  [%d] %s (%s)  目前：%s\n", idx+1, acc.DisplayName, acc.Email, account.LaunchFlagsSummary(acc.LaunchFlags))
+		ui.rawlnf("  [%d] %s (%s)  目前：%s", idx+1, acc.DisplayName, acc.Email, account.LaunchFlagsSummary(acc.LaunchFlags))
 	}
-	if !confirmChanges(scanner) {
-		fmt.Println("  已取消。")
-		fmt.Println()
+	if !confirmChanges() {
+		ui.infof("已取消。")
+		ui.blankLine()
 		return
 	}
 
@@ -133,22 +123,20 @@ func configureFlagsByFlag(accounts []account.Account, accountsFile string, scann
 		return
 	}
 
-	fmt.Printf("  ✔ 已完成%s。\n", actionLabel)
-	fmt.Println()
+	ui.successf("已完成%s。", actionLabel)
+	ui.blankLine()
 }
 
-func configureFlagsByAccount(accounts []account.Account, accountsFile string, scanner *bufio.Scanner, setMode bool) {
+func configureFlagsByAccount(accounts []account.Account, accountsFile string, setMode bool) {
 	options := account.LaunchFlagOptions()
-	fmt.Println()
-	fmt.Println("  帳號列表：")
+	ui.blankLine()
+	ui.infof("帳號列表：")
 	printAccountLaunchFlagSummary(accounts)
 	printSubMenuNav()
-	fmt.Print("  > 請選擇帳號編號：")
-
-	if !scanner.Scan() {
+	input, ok := ui.readInputf("請選擇帳號編號：")
+	if !ok {
 		return
 	}
-	input := strings.TrimSpace(scanner.Text())
 	if isMenuNav(input) != "" {
 		return
 	}
@@ -162,16 +150,14 @@ func configureFlagsByAccount(accounts []account.Account, accountsFile string, sc
 	accountIndex := selected - 1
 	acc := accounts[accountIndex]
 	actionLabel := flagActionLabel(setMode)
-	fmt.Println()
-	fmt.Printf("  請輸入要對帳號「%s」%s的 flag 編號，可用 1,3 或 2-4：\n", acc.DisplayName, actionLabel)
+	ui.blankLine()
+	ui.promptf("請輸入要對帳號「%s」%s的 flag 編號，可用 1,3 或 2-4：", acc.DisplayName, actionLabel)
 	printLaunchFlagOptions(options)
 	printSubMenuNav()
-	fmt.Print("  > 請輸入：")
-
-	if !scanner.Scan() {
+	input, ok = ui.readInputf("請輸入：")
+	if !ok {
 		return
 	}
-	input = strings.TrimSpace(scanner.Text())
 	if isMenuNav(input) != "" {
 		return
 	}
@@ -183,15 +169,15 @@ func configureFlagsByAccount(accounts []account.Account, accountsFile string, sc
 	}
 
 	mask := selectedLaunchFlagMask(flagIndexes, options)
-	fmt.Println()
-	fmt.Printf("  即將對帳號「%s」%s以下 flag：\n", acc.DisplayName, actionLabel)
+	ui.blankLine()
+	ui.infof("即將對帳號「%s」%s以下 flag：", acc.DisplayName, actionLabel)
 	for _, idx := range flagIndexes {
 		option := options[idx]
-		fmt.Printf("  [%d] %s（%s）\n", idx+1, option.Name, option.Description)
+		ui.rawlnf("  [%d] %s（%s）", idx+1, option.Name, option.Description)
 	}
-	if !confirmChanges(scanner) {
-		fmt.Println("  已取消。")
-		fmt.Println()
+	if !confirmChanges() {
+		ui.infof("已取消。")
+		ui.blankLine()
 		return
 	}
 
@@ -200,8 +186,8 @@ func configureFlagsByAccount(accounts []account.Account, accountsFile string, sc
 		return
 	}
 
-	fmt.Printf("  ✔ 已完成%s。\n", actionLabel)
-	fmt.Println()
+	ui.successf("已完成%s。", actionLabel)
+	ui.blankLine()
 }
 
 func applyLaunchFlagChanges(accounts []account.Account, accountsFile string, accountIndexes []int, mask uint32, setMode bool) error {
@@ -231,19 +217,19 @@ func applyLaunchFlagChanges(accounts []account.Account, accountsFile string, acc
 
 func printAccountLaunchFlagSummary(accounts []account.Account) {
 	for i, acc := range accounts {
-		fmt.Printf("  [%d] %s (%s)  flag：%s\n", i+1, acc.DisplayName, acc.Email, account.LaunchFlagsSummary(acc.LaunchFlags))
+		ui.rawlnf("  [%d] %s (%s)  flag：%s", i+1, acc.DisplayName, acc.Email, account.LaunchFlagsSummary(acc.LaunchFlags))
 	}
 }
 
 func printLaunchFlagOptions(options []account.LaunchFlagOption) {
 	for i, option := range options {
-		fmt.Printf("  [%d] %s", i+1, option.Name)
+		line := fmt.Sprintf("  [%d] %s", i+1, option.Name)
 		if option.Description != "" {
-			fmt.Printf("（%s）", option.Description)
+			line += fmt.Sprintf("（%s）", option.Description)
 		}
 		if option.Experimental {
-			fmt.Print("，效果依版本而定")
+			line += "，效果依版本而定"
 		}
-		fmt.Println()
+		ui.rawln(line)
 	}
 }

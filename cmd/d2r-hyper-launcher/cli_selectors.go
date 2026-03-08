@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bufio"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -24,32 +22,30 @@ func parseRegionInput(input string) *d2r.Region {
 	}
 }
 
-func selectLaunchMod(d2rPath string, scanner *bufio.Scanner) ([]string, bool) {
+func selectLaunchMod(d2rPath string) ([]string, bool) {
 	installedMods, err := mods.DiscoverInstalled(d2rPath)
 	if err != nil {
-		fmt.Printf("  讀取 mods 失敗：%v\n", err)
+		ui.errorf("讀取 mods 失敗：%v", err)
 		return nil, false
 	}
 
 	if len(installedMods) == 0 {
-		fmt.Println("  找不到已安裝 mod，將以原版啟動。")
+		ui.infof("找不到已安裝 mod，將以原版啟動。")
 		return nil, true
 	}
 
-	fmt.Println()
-	fmt.Println("  選擇 mod")
+	ui.blankLine()
+	ui.infof("選擇 mod")
 	for {
-		fmt.Println("  [0] 不使用 mod")
+		ui.option("0", "不使用 mod")
 		for i, modName := range installedMods {
-			fmt.Printf("  [%d] %s\n", i+1, modName)
+			ui.option(strconv.Itoa(i+1), modName)
 		}
 		printSubMenuNav()
-		fmt.Print("  > 請選擇：")
-
-		if !scanner.Scan() {
+		input, ok := ui.readInput()
+		if !ok {
 			return nil, false
 		}
-		input := strings.TrimSpace(scanner.Text())
 		if nav := isMenuNav(input); nav != "" {
 			return nil, false
 		}
@@ -61,12 +57,12 @@ func selectLaunchMod(d2rPath string, scanner *bufio.Scanner) ([]string, bool) {
 		}
 
 		if selected == 0 {
-			fmt.Println("  本次啟動不使用 mod。")
+			ui.infof("本次啟動不使用 mod。")
 			return nil, true
 		}
 
 		modName := installedMods[selected-1]
-		fmt.Printf("  本次使用 mod：%s\n", modName)
+		ui.successf("本次使用 mod：%s", modName)
 		return mods.BuildLaunchArgs(modName), true
 	}
 }
