@@ -45,11 +45,10 @@ func setupSwitcher(cfg *config.Config) {
 			switcher.Stop()
 
 			ui.blankLine()
-			ui.promptf("請按下想用來切換視窗的按鍵組合...")
-			ui.infof("（支援：鍵盤任意鍵 + Ctrl/Alt/Shift、滑鼠側鍵、搖桿按鈕）")
-			ui.infof("（搖桿組合鍵：先按住修飾按鈕，再按觸發按鈕，放開後完成偵測）")
-			ui.infof("（按 Esc 取消）")
-			ui.blankLine()
+			ui.infof("請按下想用來切換視窗的按鍵組合...")
+			ui.infof("支援：鍵盤任意鍵 + Ctrl/Alt/Shift、滑鼠側鍵、搖桿按鈕")
+			ui.infof("搖桿組合鍵：先按住修飾按鈕，再按觸發按鈕，放開後完成偵測")
+			ui.infof("按 Esc 取消")
 
 			modifiers, key, gamepadIndex, err := switcher.DetectKeyPress()
 			if err != nil {
