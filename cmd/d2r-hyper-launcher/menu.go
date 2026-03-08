@@ -6,8 +6,6 @@ import (
 	"strings"
 
 	"d2rhl/internal/common/config"
-	"d2rhl/internal/common/d2r"
-	"d2rhl/internal/common/process"
 	"d2rhl/internal/multiboxing/account"
 	"d2rhl/internal/switcher"
 )
@@ -37,14 +35,7 @@ func pauseAfterStartupAnnouncement() {
 
 func printMenu(accounts []account.Account, cfg *config.Config) {
 	ui.headf("主選單")
-	ui.infof("帳號列表：")
-	for i, acc := range accounts {
-		status := "未啟動"
-		if process.FindWindowByTitle(d2r.WindowTitle(acc.DisplayName)) {
-			status = "已啟動"
-		}
-		ui.rawlnf("[%d] <%s> %-15s (%s) ", i+1, status, acc.DisplayName, acc.Email)
-	}
+	printAccountList(accounts)
 
 	ui.blankLine()
 	options := ui.mainMenuOptions(func(options *cliMenuOptions) {

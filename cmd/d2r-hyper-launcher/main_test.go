@@ -385,18 +385,23 @@ func TestNormalizeLaunchFlags(t *testing.T) {
 	assert.Equal(t, uint32(account.LaunchFlagSoundInBackground), flags)
 }
 
-func TestPrintAccountLaunchFlagSummary(t *testing.T) {
+func TestPrintAccountList(t *testing.T) {
 	accounts := []account.Account{
 		{DisplayName: "Alpha", Email: "alpha@example.com", LaunchFlags: account.LaunchFlagNoSound},
 		{DisplayName: "Bravo", Email: "bravo@example.com"},
 	}
 
 	output := captureStdout(t, func() {
-		printAccountLaunchFlagSummary(accounts)
+		printAccountList(accounts)
 	})
 
-	assert.Contains(t, output, "[1] Alpha (alpha@example.com)  flag：關閉聲音")
-	assert.Contains(t, output, "[2] Bravo (bravo@example.com)  flag：無")
+	assert.Contains(t, output, "[1] <")
+	assert.Contains(t, output, "Alpha")
+	assert.Contains(t, output, "(alpha@example.com)")
+	assert.Contains(t, output, "[2] <")
+	assert.Contains(t, output, "Bravo")
+	assert.Contains(t, output, "(bravo@example.com)")
+	assert.NotContains(t, output, "flag：")
 }
 
 func TestShowInputErrorAndPause(t *testing.T) {

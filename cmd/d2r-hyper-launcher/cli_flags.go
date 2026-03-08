@@ -17,7 +17,7 @@ func setupAccountLaunchFlags(accounts []account.Account, accountsFile string) {
 	for {
 		ui.blankLine()
 		ui.headf("帳號啟動 flag 設定")
-		printAccountLaunchFlagSummary(accounts)
+		printAccountList(accounts)
 		ui.blankLine()
 		options := ui.subMenuOptions(func(options *cliMenuOptions) {
 			options.option("1", "設定 flag", "")
@@ -294,9 +294,14 @@ func applyLaunchFlagChanges(accounts []account.Account, accountsFile string, acc
 	return nil
 }
 
-func printAccountLaunchFlagSummary(accounts []account.Account) {
+func printAccountList(accounts []account.Account) {
+	ui.infof("帳號列表：")
 	for i, acc := range accounts {
-		ui.rawlnf("  [%d] %s (%s)  flag：%s", i+1, acc.DisplayName, acc.Email, account.LaunchFlagsSummary(acc.LaunchFlags))
+		status := "未啟動"
+		if isAccountRunning(acc.DisplayName) {
+			status = "已啟動"
+		}
+		ui.rawlnf("[%d] <%s> %-15s (%s) ", i+1, status, acc.DisplayName, acc.Email)
 	}
 }
 
