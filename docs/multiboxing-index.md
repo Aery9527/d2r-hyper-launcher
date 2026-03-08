@@ -11,7 +11,7 @@
 | [multiboxing-usage-guide.md](multiboxing-usage-guide.md) | 想照步驟操作的玩家 | 完整操作流程、`f` 選單、單帳號 / 批次 / 離線模式、常見問題 |
 | [D2R_PARAMS.md](D2R_PARAMS.md) | 想查啟動參數用途的人 | `LaunchFlags` 對應參數、Battle.net / mod 相關旗標、參數參考與來源 |
 | [multiboxing-technical-guide.md](multiboxing-technical-guide.md) | 想看底層原理的開發者 | 單實例鎖、handle 關閉、背景 monitor、視窗重命名、模組分工 |
-| [releases/v1.0.0.md](releases/v1.0.0.md) | 想看目前正式版整理內容的人 | `v1.0.0` 的多開相關變更摘要 |
+| [releases/v1.1.0.md](releases/v1.1.0.md) | 想看目前正式版整理內容的人 | `v1.1.0` 的多開相關變更摘要 |
 
 ## 建議閱讀順序
 
@@ -49,4 +49,4 @@
 | `LaunchFlags` 怎麼設定 | [multiboxing-usage-guide.md](multiboxing-usage-guide.md) |
 | `LaunchFlags` 每個 bitflag 對應哪些參數 | [D2R_PARAMS.md](D2R_PARAMS.md) |
 | 為什麼能多開 | [multiboxing-technical-guide.md](multiboxing-technical-guide.md) |
-| 目前正式版本整理了哪些多開能力 | [releases/v1.0.0.md](releases/v1.0.0.md) |
+| 目前正式版本整理了哪些多開能力 | [releases/v1.1.0.md](releases/v1.1.0.md) |
