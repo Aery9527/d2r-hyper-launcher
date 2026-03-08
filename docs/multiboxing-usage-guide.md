@@ -73,9 +73,7 @@ your-account2@example.com,your-password-here,副帳號-野蠻人(廢寶/鑲材),
 | 旗標 | 用途 |
 |------|------|
 | `-ns` | 關閉聲音 |
-| `-lq` | 低畫質 / Large Font Mode（效果依版本而定） |
-| `-skiplogovideo` | 跳過 Logo 影片 |
-| `-norumble` | 停用手把震動 |
+| `-lq` | 低畫質 / Large Font Mode（術士版本似乎已失效） |
 
 更完整的參數說明、來源與不確定性標註，請再查 [D2R_PARAMS.md](D2R_PARAMS.md)。
 
@@ -176,7 +174,7 @@ your-account2@example.com,your-password-here,副帳號-野蠻人(廢寶/鑲材),
 
 - `5-3` 這種反向區間會直接被視為錯誤，不會套用
 - 這個功能只會改 `LaunchFlags`；帳號、密碼、DisplayName 仍建議先手動在 `accounts.csv` 裡建立
-- `-lq` 在最新版本仍可列為候選，但本文與工具介面都會標註「效果依版本而定」
+- `-lq` 在術士版本似乎已失效，因此本文與工具介面都會直接標註這點
 - 如果你手動把 `LaunchFlags` 填成亂數、負數或文字，工具會在讀取時自動 fallback 成 `0`，並把 CSV 回寫成乾淨值
 - 如果你輸入的編號範圍或格式有誤，工具會先顯示錯誤訊息，接著提示你按鍵確認後再回到上一層，避免訊息瞬間被主選單蓋掉
 - 如果你想知道某個 flag 對應的 D2R 參數實際是什麼，請再查 [D2R_PARAMS.md](D2R_PARAMS.md)

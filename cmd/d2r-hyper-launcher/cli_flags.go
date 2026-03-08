@@ -162,7 +162,7 @@ selectFlag:
 					if comment != "" {
 						comment += "，"
 					}
-					comment += "效果依版本而定"
+					comment += "術士版本似乎已失效"
 				}
 				menuOptions.option(strconv.Itoa(i+1), option.Name, comment)
 			}
@@ -298,7 +298,7 @@ selectAccount:
 					if comment != "" {
 						comment += "，"
 					}
-					comment += "效果依版本而定"
+					comment += "術士版本似乎已失效"
 				}
 				menuOptions.option(strconv.Itoa(i+1), option.Name, comment)
 			}
@@ -501,7 +501,7 @@ func printLaunchFlagOptions(options []account.LaunchFlagOption) {
 			line += fmt.Sprintf("（%s）", option.Description)
 		}
 		if option.Experimental {
-			line += "，效果依版本而定"
+			line += "，術士版本似乎已失效"
 		}
 		ui.rawln(line)
 	}

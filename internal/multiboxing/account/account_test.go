@@ -16,7 +16,7 @@ func TestLoadAndSaveAccounts(t *testing.T) {
 	// 建立測試 CSV
 	accounts := []Account{
 		{Email: "test1@email.com", Password: "pass1", DisplayName: "Account1", LaunchFlags: LaunchFlagNoSound},
-		{Email: "test2@email.com", Password: "pass2", DisplayName: "Account2", LaunchFlags: LaunchFlagLowQuality | LaunchFlagSkipLogoVideo},
+		{Email: "test2@email.com", Password: "pass2", DisplayName: "Account2", LaunchFlags: LaunchFlagLowQuality},
 	}
 
 	err := SaveAccounts(csvPath, accounts)
@@ -38,7 +38,7 @@ func TestLoadAndSaveAccounts(t *testing.T) {
 
 	assert.Equal(t, "test2@email.com", loaded[1].Email)
 	assert.Equal(t, "Account2", loaded[1].DisplayName)
-	assert.Equal(t, uint32(LaunchFlagLowQuality|LaunchFlagSkipLogoVideo), loaded[1].LaunchFlags)
+	assert.Equal(t, uint32(LaunchFlagLowQuality), loaded[1].LaunchFlags)
 }
 
 func TestEnsureAccountsFileCreatesTemplate(t *testing.T) {
@@ -133,11 +133,11 @@ func TestLoadAccounts_RemovesUnsupportedLaunchFlagBitsAndRewritesFile(t *testing
 	loaded, err := LoadAccounts(csvPath)
 	assert.NoError(t, err)
 	assert.Len(t, loaded, 1)
-	assert.Equal(t, uint32(LaunchFlagNoSound|LaunchFlagLowQuality|LaunchFlagSkipLogoVideo|LaunchFlagNoRumble), loaded[0].LaunchFlags)
+	assert.Equal(t, uint32(LaunchFlagNoSound|LaunchFlagLowQuality), loaded[0].LaunchFlags)
 
 	data, err := os.ReadFile(csvPath)
 	assert.NoError(t, err)
-	assert.Contains(t, string(data), "legacy@example.com,plain,Legacy,29")
+	assert.Contains(t, string(data), "legacy@example.com,plain,Legacy,5")
 }
 
 func TestIsPasswordEncrypted(t *testing.T) {

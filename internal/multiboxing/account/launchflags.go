@@ -6,8 +6,8 @@ const (
 	LaunchFlagNoSound uint32 = 1 << iota
 	_
 	LaunchFlagLowQuality
-	LaunchFlagSkipLogoVideo
-	LaunchFlagNoRumble
+	_
+	_
 )
 
 type LaunchFlagOption struct {
@@ -26,23 +26,10 @@ var launchFlagOptions = []LaunchFlagOption{
 		Args:        []string{"-ns"},
 	},
 	{
-		Bit:          LaunchFlagLowQuality,
-		Name:         "低畫質 / Large Font Mode",
-		Description:  "-lq（效果依版本而定）",
-		Args:         []string{"-lq"},
-		Experimental: true,
-	},
-	{
-		Bit:         LaunchFlagSkipLogoVideo,
-		Name:        "跳過 Logo 影片",
-		Description: "-skiplogovideo",
-		Args:        []string{"-skiplogovideo"},
-	},
-	{
-		Bit:         LaunchFlagNoRumble,
-		Name:        "停用手把震動",
-		Description: "-norumble",
-		Args:        []string{"-norumble"},
+		Bit:         LaunchFlagLowQuality,
+		Name:        "低畫質 / Large Font Mode",
+		Description: "-lq（術士版本似乎已失效）",
+		Args:        []string{"-lq"},
 	},
 }
 

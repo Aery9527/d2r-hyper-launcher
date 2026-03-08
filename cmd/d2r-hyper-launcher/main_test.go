@@ -43,12 +43,12 @@ func TestDisplayVersion(t *testing.T) {
 func TestAccountLaunchArgsIncludesPerAccountFlagsAfterMods(t *testing.T) {
 	acc := account.Account{
 		DisplayName: "Alpha",
-		LaunchFlags: account.LaunchFlagNoSound | account.LaunchFlagSkipLogoVideo,
+		LaunchFlags: account.LaunchFlagNoSound | account.LaunchFlagLowQuality,
 	}
 
 	args := accountLaunchArgs(acc, []string{"-mod", "sample", "-txt"})
 
-	assert.Equal(t, []string{"-mod", "sample", "-txt", "-ns", "-skiplogovideo"}, args)
+	assert.Equal(t, []string{"-mod", "sample", "-txt", "-ns", "-lq"}, args)
 }
 
 func TestPendingBatchAccountsReturnsEmptyWhenAllRunning(t *testing.T) {
@@ -368,16 +368,16 @@ func TestParseSelectionInputRejectsOutOfRange(t *testing.T) {
 
 func TestSelectedLaunchFlagMask(t *testing.T) {
 	options := account.LaunchFlagOptions()
-	mask := selectedLaunchFlagMask([]int{0, 1, 3}, options)
+	mask := selectedLaunchFlagMask([]int{0, 1}, options)
 
-	assert.Equal(t, uint32(account.LaunchFlagNoSound|account.LaunchFlagLowQuality|account.LaunchFlagNoRumble), mask)
+	assert.Equal(t, uint32(account.LaunchFlagNoSound|account.LaunchFlagLowQuality), mask)
 }
 
 func TestAllLaunchFlagMask(t *testing.T) {
 	options := account.LaunchFlagOptions()
 	mask := allLaunchFlagMask(options)
 
-	assert.Equal(t, uint32(account.LaunchFlagNoSound|account.LaunchFlagLowQuality|account.LaunchFlagSkipLogoVideo|account.LaunchFlagNoRumble), mask)
+	assert.Equal(t, uint32(account.LaunchFlagNoSound|account.LaunchFlagLowQuality), mask)
 }
 
 func TestPrintAccountList(t *testing.T) {
@@ -402,8 +402,8 @@ func TestPrintAccountList(t *testing.T) {
 func TestBuildAccountLaunchFlagTableLines(t *testing.T) {
 	options := account.LaunchFlagOptions()
 	accounts := []account.Account{
-		{LaunchFlags: account.LaunchFlagNoSound | account.LaunchFlagSkipLogoVideo},
-		{LaunchFlags: account.LaunchFlagNoRumble},
+		{LaunchFlags: account.LaunchFlagNoSound | account.LaunchFlagLowQuality},
+		{LaunchFlags: 0},
 	}
 
 	lines := buildAccountLaunchFlagTableLines(accounts)
@@ -500,6 +500,19 @@ func TestSetupAccountLaunchFlagsShowsAllAccountsAllFlagsOption(t *testing.T) {
 	assert.Contains(t, output, "[3] 設定所有帳號所有 flag")
 }
 
+func TestSetupAccountLaunchFlagsShowsUpdatedLowQualityWording(t *testing.T) {
+	accounts := []account.Account{{DisplayName: "Alpha", Email: "alpha@example.com"}}
+
+	output := captureStdout(t, func() {
+		withTestInput(t, "1\n1\nb\nb\nb\n", func() {
+			setupAccountLaunchFlags(accounts, "")
+		})
+	})
+
+	assert.Contains(t, output, "術士版本似乎已失效")
+	assert.NotContains(t, output, "效果依版本而定")
+}
+
 func TestConfigureAllFlagsForAllAccountsSetsEveryCompatibleFlag(t *testing.T) {
 	accounts := []account.Account{
 		{DisplayName: "Alpha", Email: "alpha@example.com"},
@@ -513,7 +526,7 @@ func TestConfigureAllFlagsForAllAccountsSetsEveryCompatibleFlag(t *testing.T) {
 		})
 	})
 
-	expectedFlags := uint32(account.LaunchFlagNoSound | account.LaunchFlagLowQuality | account.LaunchFlagSkipLogoVideo | account.LaunchFlagNoRumble)
+	expectedFlags := uint32(account.LaunchFlagNoSound | account.LaunchFlagLowQuality)
 	assert.Equal(t, expectedFlags, accounts[0].LaunchFlags)
 	assert.Equal(t, expectedFlags, accounts[1].LaunchFlags)
 	assert.Contains(t, result, "設定所有帳號所有 flag")
