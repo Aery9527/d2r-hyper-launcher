@@ -65,6 +65,11 @@ func LoadAccounts(path string) ([]Account, error) {
 					sanitizedInvalid = true
 				} else {
 					launchFlags = uint32(parsed)
+					sanitized := SanitizeLaunchFlags(launchFlags)
+					if sanitized != launchFlags {
+						sanitizedInvalid = true
+						launchFlags = sanitized
+					}
 				}
 			}
 		}
@@ -79,7 +84,7 @@ func LoadAccounts(path string) ([]Account, error) {
 
 	if sanitizedInvalid {
 		if err := SaveAccounts(path, accounts); err != nil {
-			return nil, fmt.Errorf("failed to reset invalid LaunchFlags to 0: %w", err)
+			return nil, fmt.Errorf("failed to sanitize LaunchFlags: %w", err)
 		}
 	}
 

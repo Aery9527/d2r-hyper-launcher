@@ -122,6 +122,24 @@ func TestLoadAccounts_InvalidLaunchFlagsFallsBackToZeroAndRewritesFile(t *testin
 	assert.Contains(t, string(data), "legacy@example.com,plain,Legacy,0")
 }
 
+func TestLoadAccounts_RemovesUnsupportedLaunchFlagBitsAndRewritesFile(t *testing.T) {
+	dir := t.TempDir()
+	csvPath := filepath.Join(dir, "accounts.csv")
+
+	content := append(utf8BOM, []byte("Email,Password,DisplayName,LaunchFlags\nlegacy@example.com,plain,Legacy,31\n")...)
+	err := os.WriteFile(csvPath, content, 0o644)
+	assert.NoError(t, err)
+
+	loaded, err := LoadAccounts(csvPath)
+	assert.NoError(t, err)
+	assert.Len(t, loaded, 1)
+	assert.Equal(t, uint32(LaunchFlagNoSound|LaunchFlagLowQuality|LaunchFlagSkipLogoVideo|LaunchFlagNoRumble), loaded[0].LaunchFlags)
+
+	data, err := os.ReadFile(csvPath)
+	assert.NoError(t, err)
+	assert.Contains(t, string(data), "legacy@example.com,plain,Legacy,29")
+}
+
 func TestIsPasswordEncrypted(t *testing.T) {
 	assert.False(t, IsPasswordEncrypted("plaintext"))
 	assert.False(t, IsPasswordEncrypted(""))

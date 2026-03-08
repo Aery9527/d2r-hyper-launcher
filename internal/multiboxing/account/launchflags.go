@@ -4,7 +4,7 @@ import "strings"
 
 const (
 	LaunchFlagNoSound uint32 = 1 << iota
-	LaunchFlagSoundInBackground
+	_
 	LaunchFlagLowQuality
 	LaunchFlagSkipLogoVideo
 	LaunchFlagNoRumble
@@ -24,12 +24,6 @@ var launchFlagOptions = []LaunchFlagOption{
 		Name:        "關閉聲音",
 		Description: "-ns / -nosound",
 		Args:        []string{"-ns"},
-	},
-	{
-		Bit:         LaunchFlagSoundInBackground,
-		Name:        "背景保留聲音",
-		Description: "-sndbkg",
-		Args:        []string{"-sndbkg"},
 	},
 	{
 		Bit:          LaunchFlagLowQuality,
@@ -56,6 +50,18 @@ func LaunchFlagOptions() []LaunchFlagOption {
 	out := make([]LaunchFlagOption, len(launchFlagOptions))
 	copy(out, launchFlagOptions)
 	return out
+}
+
+func SupportedLaunchFlagsMask() uint32 {
+	var mask uint32
+	for _, option := range launchFlagOptions {
+		mask |= option.Bit
+	}
+	return mask
+}
+
+func SanitizeLaunchFlags(flags uint32) uint32 {
+	return flags & SupportedLaunchFlagsMask()
 }
 
 func LaunchArgs(flags uint32) []string {

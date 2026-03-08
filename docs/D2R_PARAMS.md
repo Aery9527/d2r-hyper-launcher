@@ -22,7 +22,7 @@
 
 補充說明：
 
-- `-sndbkg`、`-skiplogovideo`、`-countrycode`、`-data` 這類參數，目前能找到的多半仍是社群整理或玩家經驗，缺乏 Blizzard 正式參數文件，因此本文對這些項目刻意保留不確定性描述
+- `-skiplogovideo`、`-countrycode`、`-data` 這類參數，目前能找到的多半仍是社群整理或玩家經驗，缺乏 Blizzard 正式參數文件，因此本文對這些項目刻意保留不確定性描述
 - 若未來 Blizzard patch 導致行為改變，建議優先回頭檢查上面的 gist 與論壇討論，再配合實機測試更新本文
 
 ---
@@ -37,7 +37,7 @@
 目前 launcher 直接 expose 給多開玩家的，主要是：
 
 - Battle.net 直接登入需要的 `-uid osi`、`-username`、`-password`、`-address`
-- 每帳號 `LaunchFlags` 會用到的 `-ns`、`-sndbkg`、`-lq`、`-skiplogovideo`、`-norumble`
+- 每帳號 `LaunchFlags` 會用到的 `-ns`、`-lq`、`-skiplogovideo`、`-norumble`
 - mod 啟動會用到的 `-mod <name> -txt`
 
 ---
@@ -68,7 +68,6 @@
 | 參數 | 說明 |
 |------|------|
 | `-ns` / `-nosound` | 無聲音模式 |
-| `-sndbkg` | 社群常見用途是讓背景視窗也保留聲音；未見 Blizzard 提供正式說明 |
 
 ---
 

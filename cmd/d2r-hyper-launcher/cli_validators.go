@@ -73,20 +73,6 @@ func selectedLaunchFlagMask(flagIndexes []int, options []account.LaunchFlagOptio
 	return mask
 }
 
-func hasConflictingLaunchFlags(mask uint32) bool {
-	return mask&account.LaunchFlagNoSound != 0 && mask&account.LaunchFlagSoundInBackground != 0
-}
-
-func normalizeLaunchFlags(flags uint32, changedMask uint32) uint32 {
-	if changedMask&account.LaunchFlagNoSound != 0 {
-		flags &^= account.LaunchFlagSoundInBackground
-	}
-	if changedMask&account.LaunchFlagSoundInBackground != 0 {
-		flags &^= account.LaunchFlagNoSound
-	}
-	return flags
-}
-
 func confirmChanges() bool {
 	answer, ok := ui.readInputf("確認套用？([Y]/[n])：")
 	if !ok {
@@ -101,4 +87,27 @@ func flagActionLabel(setMode bool) string {
 		return "設定"
 	}
 	return "取消"
+}
+
+func allLaunchFlagMask(options []account.LaunchFlagOption) uint32 {
+	return selectedLaunchFlagMask(allLaunchFlagIndexes(options), options)
+}
+
+func launchFlagOptionsForMask(options []account.LaunchFlagOption, mask uint32) []account.LaunchFlagOption {
+	selected := make([]account.LaunchFlagOption, 0, len(options))
+	for _, option := range options {
+		if mask&option.Bit == 0 {
+			continue
+		}
+		selected = append(selected, option)
+	}
+	return selected
+}
+
+func allLaunchFlagIndexes(options []account.LaunchFlagOption) []int {
+	indexes := make([]int, 0, len(options))
+	for i := range options {
+		indexes = append(indexes, i)
+	}
+	return indexes
 }

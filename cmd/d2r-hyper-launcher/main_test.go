@@ -368,22 +368,16 @@ func TestParseSelectionInputRejectsOutOfRange(t *testing.T) {
 
 func TestSelectedLaunchFlagMask(t *testing.T) {
 	options := account.LaunchFlagOptions()
-	mask := selectedLaunchFlagMask([]int{0, 2, 4}, options)
+	mask := selectedLaunchFlagMask([]int{0, 1, 3}, options)
 
 	assert.Equal(t, uint32(account.LaunchFlagNoSound|account.LaunchFlagLowQuality|account.LaunchFlagNoRumble), mask)
 }
 
-func TestHasConflictingLaunchFlags(t *testing.T) {
-	assert.True(t, hasConflictingLaunchFlags(account.LaunchFlagNoSound|account.LaunchFlagSoundInBackground))
-	assert.False(t, hasConflictingLaunchFlags(account.LaunchFlagNoSound|account.LaunchFlagSkipLogoVideo))
-}
+func TestAllLaunchFlagMask(t *testing.T) {
+	options := account.LaunchFlagOptions()
+	mask := allLaunchFlagMask(options)
 
-func TestNormalizeLaunchFlags(t *testing.T) {
-	flags := normalizeLaunchFlags(account.LaunchFlagNoSound|account.LaunchFlagSoundInBackground, account.LaunchFlagNoSound)
-	assert.Equal(t, uint32(account.LaunchFlagNoSound), flags)
-
-	flags = normalizeLaunchFlags(account.LaunchFlagNoSound|account.LaunchFlagSoundInBackground, account.LaunchFlagSoundInBackground)
-	assert.Equal(t, uint32(account.LaunchFlagSoundInBackground), flags)
+	assert.Equal(t, uint32(account.LaunchFlagNoSound|account.LaunchFlagLowQuality|account.LaunchFlagSkipLogoVideo|account.LaunchFlagNoRumble), mask)
 }
 
 func TestPrintAccountList(t *testing.T) {
@@ -464,8 +458,129 @@ func TestSetupAccountLaunchFlagsShowsFlagTableAfterAccountList(t *testing.T) {
 	assert.Less(t, flagTableIndex, menuOptionIndex)
 	assert.Contains(t, output, "關閉聲音")
 	assert.Contains(t, output, "-ns / -nosound")
-	assert.Contains(t, output, "| 1")
-	assert.Contains(t, output, "| v ")
+	assert.Contains(t, output, "|    1     |")
+	assert.Contains(t, output, "|       v        |")
+}
+
+func TestSetupAccountLaunchFlagsShowsFriendlyModeLabels(t *testing.T) {
+	accounts := []account.Account{{DisplayName: "Alpha", Email: "alpha@example.com"}}
+
+	output := captureStdout(t, func() {
+		withTestInput(t, "1\nb\nb\n", func() {
+			setupAccountLaunchFlags(accounts, "")
+		})
+	})
+
+	assert.Contains(t, output, "[1] 選擇 flag 設定至多個帳號")
+	assert.Contains(t, output, "[2] 選擇帳號設定多個 flag")
+}
+
+func TestSetupAccountLaunchFlagsShowsCancelModeLabels(t *testing.T) {
+	accounts := []account.Account{{DisplayName: "Alpha", Email: "alpha@example.com"}}
+
+	output := captureStdout(t, func() {
+		withTestInput(t, "2\nb\nb\n", func() {
+			setupAccountLaunchFlags(accounts, "")
+		})
+	})
+
+	assert.Contains(t, output, "[1] 選擇 flag 取消至多個帳號")
+	assert.Contains(t, output, "[2] 選擇帳號取消多個 flag")
+}
+
+func TestSetupAccountLaunchFlagsShowsAllAccountsAllFlagsOption(t *testing.T) {
+	accounts := []account.Account{{DisplayName: "Alpha", Email: "alpha@example.com"}}
+
+	output := captureStdout(t, func() {
+		withTestInput(t, "1\nb\nb\n", func() {
+			setupAccountLaunchFlags(accounts, "")
+		})
+	})
+
+	assert.Contains(t, output, "[3] 設定所有帳號所有 flag")
+}
+
+func TestConfigureAllFlagsForAllAccountsSetsEveryCompatibleFlag(t *testing.T) {
+	accounts := []account.Account{
+		{DisplayName: "Alpha", Email: "alpha@example.com"},
+		{DisplayName: "Bravo", Email: "bravo@example.com"},
+	}
+	accountsFile := filepath.Join(t.TempDir(), "accounts.csv")
+
+	result := captureStdout(t, func() {
+		withTestInput(t, "\n", func() {
+			assert.Equal(t, "", configureAllFlagsForAllAccounts(accounts, accountsFile, true))
+		})
+	})
+
+	expectedFlags := uint32(account.LaunchFlagNoSound | account.LaunchFlagLowQuality | account.LaunchFlagSkipLogoVideo | account.LaunchFlagNoRumble)
+	assert.Equal(t, expectedFlags, accounts[0].LaunchFlags)
+	assert.Equal(t, expectedFlags, accounts[1].LaunchFlags)
+	assert.Contains(t, result, "設定所有帳號所有 flag")
+	assert.Contains(t, result, "套用範圍：全部 2 個帳號")
+
+	savedAccounts, err := account.LoadAccounts(accountsFile)
+	assert.NoError(t, err)
+	assert.Len(t, savedAccounts, 2)
+	assert.Equal(t, expectedFlags, savedAccounts[0].LaunchFlags)
+	assert.Equal(t, expectedFlags, savedAccounts[1].LaunchFlags)
+}
+
+func TestSetupAccountLaunchFlagsReturnsToTopPageAfterSuccessfulChange(t *testing.T) {
+	accounts := []account.Account{{DisplayName: "Alpha", Email: "alpha@example.com"}}
+	accountsFile := filepath.Join(t.TempDir(), "accounts.csv")
+
+	output := captureStdout(t, func() {
+		withTestInput(t, "1\n1\n1\n1\ny\nb\n", func() {
+			setupAccountLaunchFlags(accounts, accountsFile)
+		})
+	})
+
+	assert.Equal(t, 2, strings.Count(output, "帳號啟動 flag 設定"))
+	assert.Contains(t, output, "已完成設定。")
+	assert.Equal(t, uint32(account.LaunchFlagNoSound), accounts[0].LaunchFlags)
+}
+
+func TestSetupAccountLaunchFlagsReturnsToTopPageAfterCanceledBulkChange(t *testing.T) {
+	accounts := []account.Account{{DisplayName: "Alpha", Email: "alpha@example.com"}}
+	accountsFile := filepath.Join(t.TempDir(), "accounts.csv")
+
+	output := captureStdout(t, func() {
+		withTestInput(t, "1\n3\nn\nb\n", func() {
+			setupAccountLaunchFlags(accounts, accountsFile)
+		})
+	})
+
+	assert.Equal(t, 2, strings.Count(output, "帳號啟動 flag 設定"))
+	assert.Contains(t, output, "已取消。")
+	assert.Equal(t, uint32(0), accounts[0].LaunchFlags)
+}
+
+func TestSetupAccountLaunchFlagsBackFromByFlagReturnsToModeMenu(t *testing.T) {
+	accounts := []account.Account{{DisplayName: "Alpha", Email: "alpha@example.com"}}
+
+	output := captureStdout(t, func() {
+		withTestInput(t, "2\n1\nb\nb\nb\n", func() {
+			setupAccountLaunchFlags(accounts, "")
+		})
+	})
+
+	assert.Equal(t, 2, strings.Count(output, "取消 flag：選擇操作方式"))
+	assert.Equal(t, 2, strings.Count(output, "帳號啟動 flag 設定"))
+}
+
+func TestSetupAccountLaunchFlagsBackFromByAccountFlagsReturnsToAccountMenu(t *testing.T) {
+	accounts := []account.Account{{DisplayName: "Alpha", Email: "alpha@example.com"}}
+
+	output := captureStdout(t, func() {
+		withTestInput(t, "2\n2\n1\nb\nb\nb\nb\n", func() {
+			setupAccountLaunchFlags(accounts, "")
+		})
+	})
+
+	assert.Equal(t, 2, strings.Count(output, "取消 flag：先選帳號"))
+	assert.Equal(t, 2, strings.Count(output, "取消 flag：選擇操作方式"))
+	assert.Equal(t, 2, strings.Count(output, "帳號啟動 flag 設定"))
 }
 
 func TestShowInputErrorAndPause(t *testing.T) {

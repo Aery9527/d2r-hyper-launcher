@@ -15,6 +15,7 @@ func setupAccountLaunchFlags(accounts []account.Account, accountsFile string) {
 		return
 	}
 
+menuLoop:
 	for {
 		ui.blankLine()
 		ui.headf("帳號啟動 flag 設定")
@@ -54,10 +55,11 @@ func setupAccountLaunchFlags(accounts []account.Account, accountsFile string) {
 		for {
 			ui.blankLine()
 			ui.headf("%s flag：選擇操作方式", actionLabel)
-			ui.promptf("這次要如何%s flag？", actionLabel)
+			ui.infof("這次要如何%s flag？", actionLabel)
 			modeOptions := ui.subMenuOptions(func(options *cliMenuOptions) {
-				options.option("1", "以 flag 為維度", "")
-				options.option("2", "以帳號為維度", "")
+				options.option("1", fmt.Sprintf("選擇 flag %s至多個帳號", actionLabel), "")
+				options.option("2", fmt.Sprintf("選擇帳號%s多個 flag", actionLabel), "")
+				options.option("3", fmt.Sprintf("%s所有帳號所有 flag", actionLabel), "")
 			})
 			ui.menuBlock(func() {
 				modeOptions.render()
@@ -66,17 +68,41 @@ func setupAccountLaunchFlags(accounts []account.Account, accountsFile string) {
 			if !ok {
 				return
 			}
-			if isMenuNav(modeChoice) != "" {
+			switch isMenuNav(modeChoice) {
+			case "back":
+				continue menuLoop
+			case "home":
 				return
 			}
 
 			switch modeChoice {
 			case "1":
-				configureFlagsByFlag(accounts, accountsFile, setMode)
-				return
+				switch configureFlagsByFlag(accounts, accountsFile, setMode) {
+				case "back":
+					continue
+				case "home":
+					return
+				default:
+					continue menuLoop
+				}
 			case "2":
-				configureFlagsByAccount(accounts, accountsFile, setMode)
-				return
+				switch configureFlagsByAccount(accounts, accountsFile, setMode) {
+				case "back":
+					continue
+				case "home":
+					return
+				default:
+					continue menuLoop
+				}
+			case "3":
+				switch configureAllFlagsForAllAccounts(accounts, accountsFile, setMode) {
+				case "back":
+					continue
+				case "home":
+					return
+				default:
+					continue menuLoop
+				}
 			default:
 				showInvalidInputAndPause()
 			}
@@ -84,9 +110,45 @@ func setupAccountLaunchFlags(accounts []account.Account, accountsFile string) {
 	}
 }
 
-func configureFlagsByFlag(accounts []account.Account, accountsFile string, setMode bool) {
+func configureAllFlagsForAllAccounts(accounts []account.Account, accountsFile string, setMode bool) string {
+	options := account.LaunchFlagOptions()
+	actionLabel := flagActionLabel(setMode)
+	accountIndexes := make([]int, 0, len(accounts))
+	for i := range accounts {
+		accountIndexes = append(accountIndexes, i)
+	}
+
+	mask := allLaunchFlagMask(options)
+	affectedOptions := launchFlagOptionsForMask(options, mask)
+
+	ui.blankLine()
+	ui.headf("%s所有帳號所有 flag", actionLabel)
+	ui.infof("即將對全部帳號%s以下 flag：", actionLabel)
+	for _, option := range affectedOptions {
+		ui.rawlnf("  - %s（%s）", option.Name, option.Description)
+	}
+	ui.infof("套用範圍：全部 %d 個帳號", len(accounts))
+	if !confirmChanges() {
+		ui.infof("已取消。")
+		ui.blankLine()
+		return ""
+	}
+
+	if err := applyLaunchFlagChanges(accounts, accountsFile, accountIndexes, mask, setMode); err != nil {
+		showInputErrorAndPause(fmt.Sprintf("儲存失敗：%v", err))
+		return ""
+	}
+
+	ui.successf("已完成%s。", actionLabel)
+	ui.blankLine()
+	return ""
+}
+
+func configureFlagsByFlag(accounts []account.Account, accountsFile string, setMode bool) string {
 	options := account.LaunchFlagOptions()
 	var option account.LaunchFlagOption
+
+selectFlag:
 	for {
 		ui.blankLine()
 		ui.headf("%s flag：依 flag 選帳號", flagActionLabel(setMode))
@@ -110,10 +172,13 @@ func configureFlagsByFlag(accounts []account.Account, accountsFile string, setMo
 		})
 		input, ok := ui.readInputf("請選擇 flag 編號：")
 		if !ok {
-			return
+			return ""
 		}
-		if isMenuNav(input) != "" {
-			return
+		switch isMenuNav(input) {
+		case "back":
+			return "back"
+		case "home":
+			return "home"
 		}
 
 		selected, err := strconv.Atoi(input)
@@ -140,10 +205,13 @@ func configureFlagsByFlag(accounts []account.Account, accountsFile string, setMo
 		})
 		input, ok := ui.readInputf("請輸入：")
 		if !ok {
-			return
+			return ""
 		}
-		if isMenuNav(input) != "" {
-			return
+		switch isMenuNav(input) {
+		case "back":
+			goto selectFlag
+		case "home":
+			return "home"
 		}
 
 		accountIndexes, err := parseSelectionInput(input, len(accounts))
@@ -161,7 +229,7 @@ func configureFlagsByFlag(accounts []account.Account, accountsFile string, setMo
 		if !confirmChanges() {
 			ui.infof("已取消。")
 			ui.blankLine()
-			return
+			return ""
 		}
 
 		if err := applyLaunchFlagChanges(accounts, accountsFile, accountIndexes, option.Bit, setMode); err != nil {
@@ -171,16 +239,18 @@ func configureFlagsByFlag(accounts []account.Account, accountsFile string, setMo
 
 		ui.successf("已完成%s。", actionLabel)
 		ui.blankLine()
-		return
+		return ""
 	}
 }
 
-func configureFlagsByAccount(accounts []account.Account, accountsFile string, setMode bool) {
+func configureFlagsByAccount(accounts []account.Account, accountsFile string, setMode bool) string {
 	options := account.LaunchFlagOptions()
 	var (
 		accountIndex int
 		acc          account.Account
 	)
+
+selectAccount:
 	for {
 		ui.blankLine()
 		ui.headf("%s flag：先選帳號", flagActionLabel(setMode))
@@ -194,10 +264,13 @@ func configureFlagsByAccount(accounts []account.Account, accountsFile string, se
 		})
 		input, ok := ui.readInputf("請選擇帳號編號：")
 		if !ok {
-			return
+			return ""
 		}
-		if isMenuNav(input) != "" {
-			return
+		switch isMenuNav(input) {
+		case "back":
+			return "back"
+		case "home":
+			return "home"
 		}
 
 		selected, err := strconv.Atoi(input)
@@ -236,10 +309,13 @@ func configureFlagsByAccount(accounts []account.Account, accountsFile string, se
 		})
 		input, ok := ui.readInputf("請輸入：")
 		if !ok {
-			return
+			return ""
 		}
-		if isMenuNav(input) != "" {
-			return
+		switch isMenuNav(input) {
+		case "back":
+			goto selectAccount
+		case "home":
+			return "home"
 		}
 
 		flagIndexes, err := parseSelectionInput(input, len(options))
@@ -258,7 +334,7 @@ func configureFlagsByAccount(accounts []account.Account, accountsFile string, se
 		if !confirmChanges() {
 			ui.infof("已取消。")
 			ui.blankLine()
-			return
+			return ""
 		}
 
 		if err := applyLaunchFlagChanges(accounts, accountsFile, []int{accountIndex}, mask, setMode); err != nil {
@@ -268,21 +344,16 @@ func configureFlagsByAccount(accounts []account.Account, accountsFile string, se
 
 		ui.successf("已完成%s。", actionLabel)
 		ui.blankLine()
-		return
+		return ""
 	}
 }
 
 func applyLaunchFlagChanges(accounts []account.Account, accountsFile string, accountIndexes []int, mask uint32, setMode bool) error {
-	if setMode && hasConflictingLaunchFlags(mask) {
-		return fmt.Errorf("關閉聲音與背景保留聲音不可同時設定，請分開操作")
-	}
-
 	previous := make(map[int]uint32, len(accountIndexes))
 	for _, idx := range accountIndexes {
 		previous[idx] = accounts[idx].LaunchFlags
 		if setMode {
 			accounts[idx].LaunchFlags |= mask
-			accounts[idx].LaunchFlags = normalizeLaunchFlags(accounts[idx].LaunchFlags, mask)
 			continue
 		}
 		accounts[idx].LaunchFlags &^= mask
