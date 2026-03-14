@@ -247,9 +247,22 @@ type SwitcherCatalog struct {
 	ToggleNotSet    string // no key configured yet
 
 	// Enable/disable outcomes
-	Enabled              string // fmt("%s") – key display
-	Disabled             string
+	Enabled                     string // fmt("%s") – key display
+	Disabled                    string
 	DisableSaveAndRestoreFailed string // fmt("%v", "%v") – save err, restart err
+
+	// Account filter
+	OptSetAccounts             string // [2] menu option label
+	AccountFilterTitle         string // sub-menu header
+	AccountFilterDescIncluded  string // description line: what "included" means
+	AccountFilterDescExcluded  string // description line: what "excluded" means
+	AccountIncluded            string // per-account status label – included
+	AccountExcluded            string // per-account status label – excluded
+	AccountFilterSaved         string // success after save
+	AccountFilterNoAccounts    string // warning when accounts list is empty
+	AccountFilterOptToggle     string // [1~N] toggle single account
+	AccountFilterOptAll        string // [a] include-all option label
+	AccountFilterOptNone       string // [n] exclude-all option label
 }
 
 // FlagsCatalog holds strings for account launch-flag configuration.

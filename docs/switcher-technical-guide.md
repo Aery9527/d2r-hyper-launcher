@@ -134,6 +134,28 @@ sequenceDiagram
 
 ---
 
+## 帳號過濾：哪些視窗要納入切換
+
+除了視窗標題命名規則外，switcher 還支援**每個帳號個別排除**切換循環的功能。
+
+玩家可在主選單 `s → [2]` 設定哪些帳號要「已包含」（納入循環）或「已排除」（切換時跳過）。這份設定以 `ToolFlags` bitflag 存在 `accounts.csv` 的第五欄：
+
+- bit 0（`ToolFlags = 1`）：把此帳號排除在切換循環外
+
+每次工具啟動或玩家用 `r` 重新載入帳號時，switcher 都會同步更新這份排除清單（`UpdateExcludedAccounts`），不需要重新啟動 switcher。
+
+```mermaid
+flowchart TD
+    A[accounts.csv] --> B[LoadAccounts]
+    B --> C[ExcludedFromSwitcher 篩出 ToolFlagSkipSwitcher 帳號]
+    C --> D[UpdateExcludedAccounts]
+    D --> E[switchToNext 切換時跳過這些視窗]
+```
+
+這讓「有開但不想切到」的帳號（例如倉庫帳、PvP 帳）能完全透明地存在，不影響主要的操作循環。
+
+---
+
 ## 設定流程為什麼是互動式
 
 這個 scope 選擇用 CLI 引導使用者直接「按下想要的按鍵」，而不是要求手動編輯 JSON。

@@ -126,8 +126,10 @@ multiboxing 主要依賴兩種本地資料：
 
 ### 1. `accounts.csv`
 
-用來保存 Battle.net 帳號資料，包含登入信箱、密碼、顯示名稱，以及每個帳號自己的 `LaunchFlags` bitflag。
-其中 `LaunchFlags` 代表這個帳號額外要帶的 D2R 啟動參數；若使用者手動填入無效值，載入時會自動 fallback 為 `0` 並回寫。
+用來保存 Battle.net 帳號資料，包含登入信箱、密碼、顯示名稱，以及每個帳號各自的 `LaunchFlags` 與 `ToolFlags` 兩個 bitflag 欄位。
+
+- `LaunchFlags`：代表這個帳號額外要帶的 D2R 啟動參數；若使用者手動填入無效值，載入時會自動 fallback 為 `0` 並回寫。
+- `ToolFlags`：工具內部的帳號功能設定，與 D2R 啟動參數無關。目前 bit 0 (`1`) 代表把此帳號排除在 switcher 切換循環外；若填入未定義的 bit，載入時也會自動清除並回寫。
 
 ### 2. `config.json`
 

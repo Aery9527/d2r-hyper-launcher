@@ -20,7 +20,8 @@ type Account struct {
 	Email       string
 	Password    string // 加密後以 "ENC:" 前綴標記
 	DisplayName string
-	LaunchFlags uint32
+	LaunchFlags uint32 // D2R 啟動參數 bitmask
+	ToolFlags   uint32 // 工具內部設定 bitmask
 }
 
 // IsPasswordEncrypted checks if the password is already encrypted.
@@ -29,7 +30,7 @@ func IsPasswordEncrypted(password string) bool {
 }
 
 // LoadAccounts reads accounts from a CSV file.
-// CSV format: Email,Password,DisplayName[,LaunchFlags] (first row is header).
+// CSV format: Email,Password,DisplayName[,LaunchFlags[,ToolFlags]] (first row is header).
 func LoadAccounts(path string) ([]Account, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -74,11 +75,30 @@ func LoadAccounts(path string) ([]Account, error) {
 			}
 		}
 
+		var toolFlags uint32
+		if len(record) >= 5 {
+			value := strings.TrimSpace(record[4])
+			if value != "" {
+				parsed, err := strconv.ParseUint(value, 10, 32)
+				if err != nil {
+					sanitizedInvalid = true
+				} else {
+					toolFlags = uint32(parsed)
+					sanitized := SanitizeToolFlags(toolFlags)
+					if sanitized != toolFlags {
+						sanitizedInvalid = true
+						toolFlags = sanitized
+					}
+				}
+			}
+		}
+
 		accounts = append(accounts, Account{
 			Email:       strings.TrimSpace(record[0]),
 			Password:    strings.TrimSpace(record[1]),
 			DisplayName: strings.TrimSpace(record[2]),
 			LaunchFlags: launchFlags,
+			ToolFlags:   toolFlags,
 		})
 	}
 
@@ -111,7 +131,7 @@ func SaveAccounts(path string, accounts []Account) error {
 	defer writer.Flush()
 
 	// header
-	if err := writer.Write([]string{"Email", "Password", "DisplayName", "LaunchFlags"}); err != nil {
+	if err := writer.Write([]string{"Email", "Password", "DisplayName", "LaunchFlags", "ToolFlags"}); err != nil {
 		return fmt.Errorf("failed to write header: %w", err)
 	}
 
@@ -121,6 +141,7 @@ func SaveAccounts(path string, accounts []Account) error {
 			acc.Password,
 			acc.DisplayName,
 			strconv.FormatUint(uint64(acc.LaunchFlags), 10),
+			strconv.FormatUint(uint64(acc.ToolFlags), 10),
 		}
 		if err := writer.Write(record); err != nil {
 			return fmt.Errorf("failed to write account #%d: %w", i+1, err)

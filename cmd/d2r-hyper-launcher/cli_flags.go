@@ -18,7 +18,7 @@ func setupAccountLaunchFlags(accounts []account.Account, accountsFile string) {
 menuLoop:
 	for {
 		ui.headf("%s", lang.Flags.Title)
-		printAccountList(accounts)
+		printAccountList(accounts, runningStatusLabel)
 		ui.blankLine()
 		printAccountLaunchFlagTable(accounts)
 		ui.blankLine()
@@ -361,15 +361,18 @@ func applyLaunchFlagChanges(accounts []account.Account, accountsFile string, acc
 	return nil
 }
 
-func printAccountList(accounts []account.Account) {
+func printAccountList(accounts []account.Account, label func(account.Account) string) {
 	ui.infof("%s", lang.MainMenu.AccountListHeader)
 	for i, acc := range accounts {
-		status := lang.Launch.StatusStopped
-		if isAccountRunning(acc.DisplayName) {
-			status = lang.Launch.StatusRunning
-		}
-		ui.rawlnf("[%d] <%s> %-15s (%s) ", i+1, status, acc.DisplayName, acc.Email)
+		ui.rawlnf("[%d] <%s> %-15s (%s)", i+1, label(acc), acc.DisplayName, acc.Email)
 	}
+}
+
+func runningStatusLabel(acc account.Account) string {
+	if isAccountRunning(acc.DisplayName) {
+		return lang.Launch.StatusRunning
+	}
+	return lang.Launch.StatusStopped
 }
 
 func printAccountLaunchFlagTable(accounts []account.Account) {

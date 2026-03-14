@@ -491,7 +491,7 @@ func TestPrintAccountList(t *testing.T) {
 	}
 
 	output := captureStdout(t, func() {
-		printAccountList(accounts)
+		printAccountList(accounts, runningStatusLabel)
 	})
 
 	assert.Contains(t, output, "[1] <")
@@ -817,7 +817,7 @@ func TestSetupSwitcherKeepsCurrentMenuAfterInvalidInput(t *testing.T) {
 
 	output := captureStdout(t, func() {
 		withTestInput(t, "x\n\nb\n", func() {
-			setupSwitcher(&config.Config{})
+			setupSwitcher(&config.Config{}, nil, "")
 		})
 	})
 

@@ -156,6 +156,18 @@ var catalogEn = Catalog{
 		Enabled:                     "Window switcher enabled: %s",
 		Disabled:                    "Window switcher disabled; settings are preserved.",
 		DisableSaveAndRestoreFailed: "Save failed: %v; and switcher could not be restored: %v",
+
+		OptSetAccounts:          "Set switch accounts",
+		AccountFilterTitle:         "Switch account filter",
+		AccountFilterDescIncluded:  "included — the account joins the switch cycle when the hotkey fires",
+		AccountFilterDescExcluded:  "excluded — the account is skipped during switching",
+		AccountIncluded:            "included",
+		AccountExcluded:            "excluded",
+		AccountFilterSaved:      "Switch account settings saved",
+		AccountFilterNoAccounts: "No accounts found. Please configure accounts.csv first.",
+		AccountFilterOptToggle:  "Toggle account",
+		AccountFilterOptAll:     "Include all",
+		AccountFilterOptNone:    "Exclude all",
 	},
 
 	Flags: FlagsCatalog{

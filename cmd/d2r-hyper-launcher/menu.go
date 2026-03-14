@@ -49,7 +49,7 @@ func pauseAfterStartupAnnouncement() {
 
 func printMenu(accounts []account.Account, cfg *config.Config) {
 	ui.headf("%s", lang.MainMenu.Title)
-	printAccountList(accounts)
+	printAccountList(accounts, runningStatusLabel)
 
 	ui.blankLine()
 	options := ui.mainMenuOptions(func(options *cliMenuOptions) {

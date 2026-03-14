@@ -106,6 +106,9 @@ func main() {
 		return
 	}
 
+	// Sync switcher exclusion list from ToolFlags after accounts are loaded.
+	switcher.UpdateExcludedAccounts(account.ExcludedFromSwitcher(accounts))
+
 	changed, err := account.EncryptPlaintextPasswords(accountsFile, accounts)
 	if err != nil {
 		showInputErrorAndPause(fmt.Sprintf(lang.Startup.EncryptFailed, err))
@@ -133,6 +136,8 @@ func main() {
 			accounts, err = account.LoadAccounts(accountsFile)
 			if err != nil {
 				ui.errorf(lang.Startup.AccountsLoadRefresh, err)
+			} else {
+				switcher.UpdateExcludedAccounts(account.ExcludedFromSwitcher(accounts))
 			}
 		case "0":
 			launchOffline(cfg)
@@ -143,7 +148,7 @@ func main() {
 		case "p":
 			setupD2RPath(cfg)
 		case "s":
-			setupSwitcher(cfg)
+			setupSwitcher(cfg, accounts, accountsFile)
 		case "f":
 			setupAccountLaunchFlags(accounts, accountsFile)
 		case "l":

@@ -1,13 +1,15 @@
 package main
 
 import (
+	"strconv"
 	"strings"
 
 	"d2rhl/internal/common/config"
+	"d2rhl/internal/multiboxing/account"
 	"d2rhl/internal/switcher"
 )
 
-func setupSwitcher(cfg *config.Config) {
+func setupSwitcher(cfg *config.Config, accounts []account.Account, accountsFile string) {
 	for {
 		ui.headf("%s", lang.Switcher.Title)
 
@@ -26,6 +28,7 @@ func setupSwitcher(cfg *config.Config) {
 		ui.blankLine()
 		options := ui.subMenuOptions(func(options *cliMenuOptions) {
 			options.option("1", lang.Switcher.OptSetKey, "")
+			options.option("2", lang.Switcher.OptSetAccounts, "")
 			options.option("0", switcherToggleOptionLabel(cfg), "")
 		})
 		ui.menuBlock(func() {
@@ -95,6 +98,14 @@ func setupSwitcher(cfg *config.Config) {
 			ui.blankLine()
 			return
 
+		case "2":
+			setupSwitcherAccounts(cfg, accountsFile)
+			// Refresh in-memory accounts for subsequent iterations in case
+			// the caller reuses them; a full reload happens at the menu level.
+			if reloaded, err := account.LoadAccounts(accountsFile); err == nil {
+				accounts = reloaded
+			}
+
 		case "0":
 			if !toggleSwitcherEnabled(cfg) {
 				continue
@@ -104,6 +115,84 @@ func setupSwitcher(cfg *config.Config) {
 		default:
 			showInvalidInputAndPause()
 		}
+	}
+}
+
+func setupSwitcherAccounts(cfg *config.Config, accountsFile string) {
+	accounts, err := account.LoadAccounts(accountsFile)
+	if err != nil || len(accounts) == 0 {
+		ui.warningf("%s", lang.Switcher.AccountFilterNoAccounts)
+		ui.blankLine()
+		return
+	}
+
+	for {
+		ui.headf("%s", lang.Switcher.AccountFilterTitle)
+		ui.infoLines(
+			lang.Switcher.AccountFilterDescIncluded,
+			lang.Switcher.AccountFilterDescExcluded,
+		)
+
+		printAccountList(accounts, func(acc account.Account) string {
+			if account.SkipSwitcher(acc.ToolFlags) {
+				return lang.Switcher.AccountExcluded
+			}
+			return lang.Switcher.AccountIncluded
+		})
+
+		ui.blankLine()
+		toggleKey := "1~" + strconv.Itoa(len(accounts))
+		options := ui.subMenuOptions(func(options *cliMenuOptions) {
+			options.option(toggleKey, lang.Switcher.AccountFilterOptToggle, "")
+			options.option("a", lang.Switcher.AccountFilterOptAll, "")
+			options.option("n", lang.Switcher.AccountFilterOptNone, "")
+		})
+		ui.menuBlock(func() {
+			options.render()
+		})
+
+		choice, ok := ui.readInput()
+		if !ok {
+			return
+		}
+		if isMenuNav(choice) != "" {
+			return
+		}
+
+		switch choice {
+		case "a":
+			for i := range accounts {
+				accounts[i].ToolFlags &^= account.ToolFlagSkipSwitcher
+			}
+		case "n":
+			for i := range accounts {
+				accounts[i].ToolFlags |= account.ToolFlagSkipSwitcher
+			}
+		default:
+			idx, parseErr := strconv.Atoi(choice)
+			if parseErr != nil || idx < 1 || idx > len(accounts) {
+				showInvalidInputAndPause()
+				continue
+			}
+			i := idx - 1
+			if account.SkipSwitcher(accounts[i].ToolFlags) {
+				accounts[i].ToolFlags &^= account.ToolFlagSkipSwitcher
+			} else {
+				accounts[i].ToolFlags |= account.ToolFlagSkipSwitcher
+			}
+		}
+
+		if saveErr := account.SaveAccounts(accountsFile, accounts); saveErr != nil {
+			ui.warningf(lang.Common.SaveFailed, saveErr)
+			if reloaded, loadErr := account.LoadAccounts(accountsFile); loadErr == nil {
+				accounts = reloaded
+			}
+			continue
+		}
+
+		switcher.UpdateExcludedAccounts(account.ExcludedFromSwitcher(accounts))
+		ui.successf("%s", lang.Switcher.AccountFilterSaved)
+		ui.blankLine()
 	}
 }
 

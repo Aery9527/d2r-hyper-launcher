@@ -156,6 +156,18 @@ var catalogZhTW = Catalog{
 		Enabled:                     "已開啟切換功能：%s",
 		Disabled:                    "已關閉切換功能，原設定會保留。",
 		DisableSaveAndRestoreFailed: "設定儲存失敗：%v；且無法恢復切換功能：%v",
+
+		OptSetAccounts:          "設定切換帳號",
+		AccountFilterTitle:         "切換帳號設定",
+		AccountFilterDescIncluded:  "已包含 — 按下切換鍵時，switcher 會輪到此帳號",
+		AccountFilterDescExcluded:  "已排除 — 切換時會略過此帳號",
+		AccountIncluded:            "已包含",
+		AccountExcluded:            "已排除",
+		AccountFilterSaved:      "已儲存切換帳號設定",
+		AccountFilterNoAccounts: "尚無帳號，請先設定 accounts.csv",
+		AccountFilterOptToggle:  "切換指定帳號狀態",
+		AccountFilterOptAll:     "全部包含",
+		AccountFilterOptNone:    "全部排除",
 	},
 
 	Flags: FlagsCatalog{

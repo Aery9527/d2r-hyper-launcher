@@ -18,7 +18,7 @@ description: "Handle repository-specific Diablo II: Resurrected multiboxing work
 - [internal/multiboxing/launcher/enumerator.go](../../../internal/multiboxing/launcher/enumerator.go) - 列舉系統 handle 並篩選目標 Event
 - [internal/multiboxing/launcher/winapi.go](../../../internal/multiboxing/launcher/winapi.go) - NT API 封裝
 - [internal/multiboxing/monitor/handle_monitor.go](../../../internal/multiboxing/monitor/handle_monitor.go) - 背景 handle monitor
-- [internal/multiboxing/account/account.go](../../../internal/multiboxing/account/account.go) 與 [internal/multiboxing/account/crypto.go](../../../internal/multiboxing/account/crypto.go) - CSV / DPAPI
+- [internal/multiboxing/account/account.go](../../../internal/multiboxing/account/account.go)、[internal/multiboxing/account/toolflags.go](../../../internal/multiboxing/account/toolflags.go) 與 [internal/multiboxing/account/crypto.go](../../../internal/multiboxing/account/crypto.go) - CSV / DPAPI / ToolFlags
 - [internal/common/config/config.go](../../../internal/common/config/config.go) - `d2r_path`、`launch_delay`、資料目錄
 - [internal/multiboxing/mods/](../../../internal/multiboxing/mods/) - 已安裝 mod 掃描與 `-mod` / `-txt` 參數組裝
 - [internal/common/d2r/constants.go](../../../internal/common/d2r/constants.go) - 進程名、Event 名稱、區域常數、視窗標題前綴
@@ -33,6 +33,7 @@ description: "Handle repository-specific Diablo II: Resurrected multiboxing work
 4. 視窗標題需維持 `D2R-<DisplayName>` 格式，這也是 switcher 用來找視窗的依據。
 5. 背景 monitor 會每 2 秒掃描 D2R 行程，替新 PID 再做一次 handle 關閉。
 6. `0` 與 `a` 啟動流程會先掃描 `D2R.exe` 同層 `mods\` 目錄；只要 mod 資料夾內有 `modinfo.json`，或有同名 `<mod>.mpq`，就會出現在選單中，並轉成 `-mod <name> -txt` 參數。
+7. `accounts.csv` 共 5 欄：`Email,Password,DisplayName,LaunchFlags,ToolFlags`。`LaunchFlags` 是 D2R 啟動參數 bitmask；`ToolFlags` 是工具內部設定 bitmask，兩者完全獨立。目前 `ToolFlags` bit 0 = `ToolFlagSkipSwitcher`（從 switcher 切換循環排除）。舊版 4 欄 CSV 載入時 `ToolFlags` 自動為 0，向後相容。
 
 ## 修改時要守住的規則
 

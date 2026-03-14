@@ -10,17 +10,18 @@ description: "Handle repository-specific D2R window-switcher work in d2r-hyper-l
 ## 先看哪些檔案
 
 - [cmd/d2r-hyper-launcher/main.go](../../../cmd/d2r-hyper-launcher/main.go) - switcher bootstrap 與主選單 dispatch
-- [cmd/d2r-hyper-launcher/cli_switcher.go](../../../cmd/d2r-hyper-launcher/cli_switcher.go) - `setupSwitcher()` 與 switcher 設定流程
+- [cmd/d2r-hyper-launcher/cli_switcher.go](../../../cmd/d2r-hyper-launcher/cli_switcher.go) - `setupSwitcher()` / `setupSwitcherAccounts()` 與 switcher 設定流程
 - [cmd/d2r-hyper-launcher/feedback.go](../../../cmd/d2r-hyper-launcher/feedback.go) 與 [cmd/d2r-hyper-launcher/menu.go](../../../cmd/d2r-hyper-launcher/menu.go) - 共用錯誤回饋與子選單導航
-- [internal/switcher/switcher.go](../../../internal/switcher/switcher.go) - `Start()` / `Stop()` / `IsRunning()` 與視窗切換主邏輯
+- [internal/switcher/switcher.go](../../../internal/switcher/switcher.go) - `Start()` / `Stop()` / `IsRunning()` / `UpdateExcludedAccounts()` 與視窗切換主邏輯
 - [internal/switcher/detect.go](../../../internal/switcher/detect.go) - CLI 互動式按鍵偵測
 - [internal/switcher/hotkey.go](../../../internal/switcher/hotkey.go) - 鍵盤快捷鍵
 - [internal/switcher/mousehook.go](../../../internal/switcher/mousehook.go) - 滑鼠側鍵
 - [internal/switcher/gamepad.go](../../../internal/switcher/gamepad.go) - XInput 偵測與輪詢
 - [internal/switcher/keymap.go](../../../internal/switcher/keymap.go) - VK / 顯示名稱 / modifier 對應
-- [internal/common/process/window.go](../../../internal/common/process/window.go) - 枚舉 `D2R-` 視窗、切換前景視窗
+- [internal/common/process/window.go](../../../internal/common/process/window.go) - 枚舉 `D2R-` 視窗、切換前景視窗、`GetWindowTitle()`
 - [internal/common/config/config.go](../../../internal/common/config/config.go) - `SwitcherConfig`
 - [internal/common/d2r/constants.go](../../../internal/common/d2r/constants.go) - `WindowTitlePrefix`
+- [internal/multiboxing/account/toolflags.go](../../../internal/multiboxing/account/toolflags.go) - `ToolFlagSkipSwitcher`、`ExcludedFromSwitcher()` 等帳號過濾 helpers
 - [docs/switcher-usage-guide.md](../../../docs/switcher-usage-guide.md) - 使用者可見設定流程
 
 ## 核心事實
@@ -30,6 +31,8 @@ description: "Handle repository-specific D2R window-switcher work in d2r-hyper-l
 3. 鍵盤支援 `ctrl` / `alt` / `shift` 修飾鍵；搖桿修飾鍵使用 `Gamepad_*` 名稱。
 4. `DetectKeyPress()` 會同時監聽鍵盤、滑鼠與搖桿，第一個成功事件獲勝。
 5. 搖桿偵測採「先按住修飾鍵，再按觸發鍵，最後放開觸發鍵」的模式，這個 UX 要跟文件一致。
+6. `UpdateExcludedAccounts(names []string)` 控制哪些 DisplayName 要從切換循環排除，不需要重啟 switcher。在工具啟動、`r` 重載帳號、或玩家在 `s → [2]` 調整後都應立即呼叫。
+7. 帳號是否排除由 `accounts.csv` 第 5 欄 `ToolFlags` 的 bit 0（`ToolFlagSkipSwitcher`）決定；`ExcludedFromSwitcher(accounts)` 負責篩出清單。
 
 ## 修改時要守住的規則
 
