@@ -70,10 +70,19 @@ type msllHookStruct struct {
 }
 
 var (
-	mu       sync.Mutex
-	stopFunc func()
-	running  bool
+	mu               sync.Mutex
+	stopFunc         func()
+	running          bool
+	excludedAccounts []string // display names excluded from the switch cycle
 )
+
+// UpdateExcludedAccounts updates the set of account display names that should be
+// skipped during window cycling. Safe to call while the switcher is running.
+func UpdateExcludedAccounts(names []string) {
+	mu.Lock()
+	excludedAccounts = names
+	mu.Unlock()
+}
 
 // IsRunning returns whether the switcher is currently active.
 func IsRunning() bool {
@@ -130,10 +139,34 @@ func Stop() {
 	}
 }
 
-// switchToNext finds all D2R windows and switches focus to the next one.
+// switchToNext finds all D2R windows and switches focus to the next one,
+// skipping accounts listed in excludedAccounts.
 func switchToNext() {
 	hwnds := process.FindWindowsByTitlePrefix(d2r.WindowTitlePrefix)
-	if len(hwnds) < 2 {
+
+	mu.Lock()
+	excluded := make(map[string]struct{}, len(excludedAccounts))
+	for _, name := range excludedAccounts {
+		excluded[d2r.WindowTitle(name)] = struct{}{}
+	}
+	mu.Unlock()
+
+	if len(excluded) > 0 {
+		filtered := hwnds[:0]
+		for _, hwnd := range hwnds {
+			if _, skip := excluded[process.GetWindowTitle(hwnd)]; !skip {
+				filtered = append(filtered, hwnd)
+			}
+		}
+		hwnds = filtered
+	}
+
+	if len(hwnds) == 0 {
+		return
+	}
+
+	if len(hwnds) == 1 {
+		_ = process.SwitchToWindow(hwnds[0])
 		return
 	}
 

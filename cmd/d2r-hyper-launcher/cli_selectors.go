@@ -25,18 +25,20 @@ func parseRegionInput(input string) *d2r.Region {
 func selectLaunchMod(d2rPath string) ([]string, bool) {
 	installedMods, err := mods.DiscoverInstalled(d2rPath)
 	if err != nil {
-		ui.errorf("讀取 mods 失敗：%v", err)
+		ui.errorf(lang.Launch.ModLoadFailed, err)
 		return nil, false
 	}
 
 	if len(installedMods) == 0 {
-		ui.infof("找不到已安裝 mod，將以原版啟動。")
+		ui.infof("%s", lang.Launch.ModNoMods)
 		return nil, true
 	}
 
-	for {
+	var result []string
+	chosen := false
+	_ = runMenu(func() {
 		options := ui.subMenuOptions(func(options *cliMenuOptions) {
-			options.option("0", "不使用 mod", "")
+			options.option("0", lang.Launch.ModOptNone, "")
 			for i, modName := range installedMods {
 				options.option(strconv.Itoa(i+1), modName, "")
 			}
@@ -44,27 +46,22 @@ func selectLaunchMod(d2rPath string) ([]string, bool) {
 		ui.menuBlock(func() {
 			options.render()
 		})
-		input, ok := ui.readInput()
-		if !ok {
-			return nil, false
-		}
-		if nav := isMenuNav(input); nav != "" {
-			return nil, false
-		}
-
+	}, func(input string) error {
 		selected, err := strconv.Atoi(input)
 		if err != nil || selected < 0 || selected > len(installedMods) {
 			showInvalidInputAndPause()
-			continue
+			return nil
 		}
-
 		if selected == 0 {
-			ui.infof("本次啟動不使用 mod。")
-			return nil, true
+			ui.infof("%s", lang.Launch.ModNoneChosen)
+			result = nil
+		} else {
+			modName := installedMods[selected-1]
+			ui.infof(lang.Launch.ModUsing, modName)
+			result = mods.BuildLaunchArgs(modName)
 		}
-
-		modName := installedMods[selected-1]
-		ui.infof("本次使用 mod：%s", modName)
-		return mods.BuildLaunchArgs(modName), true
-	}
+		chosen = true
+		return errNavDone
+	})
+	return result, chosen
 }

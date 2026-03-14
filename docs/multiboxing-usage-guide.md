@@ -54,9 +54,9 @@
 範例內容：
 
 ```csv
-Email,Password,DisplayName,LaunchFlags
-your-account1@example.com,your-password-here,主帳號-法師(倉庫/武器/飾品),
-your-account2@example.com,your-password-here,副帳號-野蠻人(廢寶/鑲材),
+Email,Password,DisplayName,LaunchFlags,ToolFlags
+your-account1@example.com,your-password-here,主帳號-法師(倉庫/武器/飾品),,
+your-account2@example.com,your-password-here,副帳號-野蠻人(廢寶/鑲材),,
 ```
 
 欄位說明：
@@ -67,6 +67,7 @@ your-account2@example.com,your-password-here,副帳號-野蠻人(廢寶/鑲材),
 | `Password` | ✅ | 帳號密碼；第一次啟動後會自動改寫成加密字串 |
 | `DisplayName` | ✅ | 主選單顯示名稱，也是視窗標題後綴 |
 | `LaunchFlags` | 可先留空 | 這個帳號額外要帶的啟動旗標 bitflag；一般玩家可先留空，工具會自動 fallback 成 `0`，之後再回到主選單用 `f` 設定 |
+| `ToolFlags` | 可先留空 | 工具內部的帳號功能設定 bitflag；可先留空，預設 `0`。目前支援：`1` = 把此帳號排除在 switcher 切換循環外（可在主選單 `s → [2]` 設定） |
 
 `LaunchFlags` 目前常見對應如下：
 
@@ -136,6 +137,7 @@ your-account2@example.com,your-password-here,副帳號-野蠻人(廢寶/鑲材),
   f       設定帳號啟動 flag
   p       選擇 D2R.exe 路徑
   s       視窗切換設定
+  l       語言設定 / Language
   r       重新整理狀態
   q       退出
 --------------------------------------------

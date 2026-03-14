@@ -334,6 +334,21 @@ func TestPauseAfterSuccessfulLaunchWaitsThreeSeconds(t *testing.T) {
 	assert.Equal(t, 3*time.Second, slept)
 }
 
+func TestDisplayDelayFixed(t *testing.T) {
+	delay := config.LaunchDelayRange{MinSeconds: 30, MaxSeconds: 30}
+	assert.Equal(t, "30 秒", displayDelay(delay))
+}
+
+func TestDisplayDelayRandom(t *testing.T) {
+	delay := config.LaunchDelayRange{MinSeconds: 30, MaxSeconds: 60}
+	assert.Equal(t, "30-60 秒（隨機）", displayDelay(delay))
+}
+
+func TestLangDefaultsToZhTW(t *testing.T) {
+	assert.Equal(t, "請選擇：", lang.Common.SelectPrompt)
+	assert.Equal(t, "再見！", lang.Common.Goodbye)
+}
+
 func TestParseLaunchDelayInput(t *testing.T) {
 	delay, err := parseLaunchDelayInput("45")
 	assert.NoError(t, err)
@@ -476,7 +491,7 @@ func TestPrintAccountList(t *testing.T) {
 	}
 
 	output := captureStdout(t, func() {
-		printAccountList(accounts)
+		printAccountList(accounts, runningStatusLabel)
 	})
 
 	assert.Contains(t, output, "[1] <")
@@ -611,7 +626,7 @@ func TestConfigureAllFlagsForAllAccountsSetsEveryCompatibleFlag(t *testing.T) {
 
 	result := captureStdout(t, func() {
 		withTestInput(t, "\n", func() {
-			assert.Equal(t, "", configureAllFlagsForAllAccounts(accounts, accountsFile, true))
+			assert.ErrorIs(t, configureAllFlagsForAllAccounts(accounts, accountsFile, true), errNavDone)
 		})
 	})
 
@@ -802,7 +817,7 @@ func TestSetupSwitcherKeepsCurrentMenuAfterInvalidInput(t *testing.T) {
 
 	output := captureStdout(t, func() {
 		withTestInput(t, "x\n\nb\n", func() {
-			setupSwitcher(&config.Config{})
+			setupSwitcher(&config.Config{}, nil, "")
 		})
 	})
 

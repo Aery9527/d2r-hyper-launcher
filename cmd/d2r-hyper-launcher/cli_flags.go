@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -10,105 +11,70 @@ import (
 
 func setupAccountLaunchFlags(accounts []account.Account, accountsFile string) {
 	if len(accounts) == 0 {
-		ui.infof("目前沒有可設定的帳號。")
+		ui.infof("%s", lang.Flags.NoAccounts)
 		ui.blankLine()
 		return
 	}
 
-menuLoop:
-	for {
-		ui.headf("帳號啟動 flag 設定")
-		printAccountList(accounts)
+	// Outer loop: set/clear mode selection.
+	_ = runMenu(func() {
+		ui.headf("%s", lang.Flags.Title)
+		printAccountList(accounts, runningStatusLabel)
 		ui.blankLine()
 		printAccountLaunchFlagTable(accounts)
 		ui.blankLine()
 		options := ui.subMenuOptions(func(options *cliMenuOptions) {
-			options.option("1", "設定 flag", "")
-			options.option("2", "取消 flag", "")
+			options.option("1", lang.Flags.OptSetFlag, "")
+			options.option("2", lang.Flags.OptClearFlag, "")
 		})
 		ui.menuBlock(func() {
 			options.render()
 		})
-		choice, ok := ui.readInput()
-		if !ok {
-			return
-		}
-		if isMenuNav(choice) != "" {
-			return
-		}
-
+	}, func(choice string) error {
 		var setMode bool
-		var actionLabel string
 		switch choice {
 		case "1":
 			setMode = true
-			actionLabel = "設定"
 		case "2":
 			setMode = false
-			actionLabel = "取消"
 		default:
 			showInvalidInputAndPause()
-			continue
+			return nil
 		}
 
-		for {
-			ui.headf("%s flag：選擇操作方式", actionLabel)
-			ui.infof("這次要如何%s flag？", actionLabel)
+		// Inner loop: configure method selection.
+		return runMenu(func() {
+			actionLabel := flagActionLabel(setMode)
+			ui.headf(lang.Flags.ModeTitle, actionLabel)
+			ui.infof(lang.Flags.ModeQuestion, actionLabel)
 			modeOptions := ui.subMenuOptions(func(options *cliMenuOptions) {
-				options.option("1", fmt.Sprintf("選擇 flag %s至多個帳號", actionLabel), "")
-				options.option("2", fmt.Sprintf("選擇帳號%s多個 flag", actionLabel), "")
-				options.option("3", fmt.Sprintf("%s所有帳號所有 flag", actionLabel), "")
+				options.option("1", fmt.Sprintf(lang.Flags.OptFlagToAccounts, actionLabel), "")
+				options.option("2", fmt.Sprintf(lang.Flags.OptAccountToFlags, actionLabel), "")
+				options.option("3", fmt.Sprintf(lang.Flags.OptAllFlagsAll, actionLabel), "")
 			})
 			ui.menuBlock(func() {
 				modeOptions.render()
 			})
-			modeChoice, ok := ui.readInput()
-			if !ok {
-				return
-			}
-			switch isMenuNav(modeChoice) {
-			case "back":
-				continue menuLoop
-			case "home":
-				return
-			}
-
+		}, func(modeChoice string) error {
 			switch modeChoice {
 			case "1":
-				switch configureFlagsByFlag(accounts, accountsFile, setMode) {
-				case "back":
-					continue
-				case "home":
-					return
-				default:
-					continue menuLoop
-				}
+				return configureFlagsByFlag(accounts, accountsFile, setMode)
 			case "2":
-				switch configureFlagsByAccount(accounts, accountsFile, setMode) {
-				case "back":
-					continue
-				case "home":
-					return
-				default:
-					continue menuLoop
-				}
+				return configureFlagsByAccount(accounts, accountsFile, setMode)
 			case "3":
-				switch configureAllFlagsForAllAccounts(accounts, accountsFile, setMode) {
-				case "back":
-					continue
-				case "home":
-					return
-				default:
-					continue menuLoop
-				}
+				return configureAllFlagsForAllAccounts(accounts, accountsFile, setMode)
 			default:
 				showInvalidInputAndPause()
 			}
-		}
-	}
+			return nil
+		})
+	})
 }
 
-func configureAllFlagsForAllAccounts(accounts []account.Account, accountsFile string, setMode bool) string {
+// configureAllFlagsForAllAccounts applies or clears every known launch flag for
+// all accounts.  Returns errNavDone on any completion (success, cancel, or error)
+// so the caller (mode-selection loop) exits back to the set/clear selection.
+func configureAllFlagsForAllAccounts(accounts []account.Account, accountsFile string, setMode bool) error {
 	options := account.LaunchFlagOptions()
 	actionLabel := flagActionLabel(setMode)
 	accountIndexes := make([]int, 0, len(accounts))
@@ -119,226 +85,244 @@ func configureAllFlagsForAllAccounts(accounts []account.Account, accountsFile st
 	mask := allLaunchFlagMask(options)
 	affectedOptions := launchFlagOptionsForMask(options, mask)
 
-	ui.headf("%s所有帳號所有 flag", actionLabel)
-	ui.infof("即將對全部帳號%s以下 flag：", actionLabel)
+	ui.headf(lang.Flags.FlagAllTitle, actionLabel)
+	ui.infof(lang.Flags.FlagAllAbout, actionLabel)
 	for _, option := range affectedOptions {
 		ui.rawlnf("  - %s（%s）", option.Name, option.Description)
 	}
-	ui.infof("套用範圍：全部 %d 個帳號", len(accounts))
+	ui.infof(lang.Flags.FlagAllCount, len(accounts))
 	if !confirmChanges() {
-		ui.infof("已取消。")
+		ui.infof("%s", lang.Common.Cancelled)
 		ui.blankLine()
-		return ""
+		return errNavDone
 	}
 
 	if err := applyLaunchFlagChanges(accounts, accountsFile, accountIndexes, mask, setMode); err != nil {
-		showInputErrorAndPause(fmt.Sprintf("儲存失敗：%v", err))
-		return ""
+		showInputErrorAndPause(fmt.Sprintf(lang.Flags.SaveFailed, err))
+		return errNavDone
 	}
 
-	ui.successf("已完成%s。", actionLabel)
+	ui.successf(lang.Flags.Done, actionLabel)
 	ui.blankLine()
-	return ""
+	return errNavDone
 }
 
-func configureFlagsByFlag(accounts []account.Account, accountsFile string, setMode bool) string {
+// configureFlagsByFlag lets the player pick a flag then select which accounts to apply it to.
+// Returns nil when the player pressed b at flag selection (stay in mode-select),
+// errNavDone on successful apply (exit mode-select, back to set/clear),
+// or ErrNavHome when h is pressed anywhere.
+func configureFlagsByFlag(accounts []account.Account, accountsFile string, setMode bool) error {
 	options := account.LaunchFlagOptions()
-	var option account.LaunchFlagOption
+	var completed bool
 
-selectFlag:
-	for {
-		ui.headf("%s flag：依 flag 選帳號", flagActionLabel(setMode))
-		flagOptions := ui.subMenuOptions(func(menuOptions *cliMenuOptions) {
-			for i, option := range options {
-				comment := option.Description
-				if option.Description != "" {
-					comment = fmt.Sprintf("說明：%s", option.Description)
-				}
-				if option.Experimental {
-					if comment != "" {
-						comment += "，"
+	err := runMenuRead(
+		func() {
+			ui.headf(lang.Flags.FlagByFlagTitle, flagActionLabel(setMode))
+			flagOptions := ui.subMenuOptions(func(menuOptions *cliMenuOptions) {
+				for i, option := range options {
+					comment := ""
+					if option.Description != "" {
+						comment = fmt.Sprintf(lang.Flags.FlagDescPrefix, option.Description)
 					}
-					comment += "術士版本似乎已失效"
+					if option.Experimental {
+						if comment != "" {
+							comment += "，"
+						}
+						comment += lang.Flags.FlagExperimental
+					}
+					menuOptions.option(strconv.Itoa(i+1), option.Name, comment)
 				}
-				menuOptions.option(strconv.Itoa(i+1), option.Name, comment)
+			})
+			ui.menuBlock(func() { flagOptions.render() })
+		},
+		func() (string, bool) {
+			return ui.readInputf("%s", lang.Flags.FlagByFlagSelectPrompt)
+		},
+		func(input string) error {
+			selected, err := strconv.Atoi(input)
+			if err != nil || selected < 1 || selected > len(options) {
+				showInputErrorAndPause(lang.Flags.InvalidFlagID)
+				return nil
 			}
-		})
-		ui.menuBlock(func() {
-			flagOptions.render()
-		})
-		input, ok := ui.readInputf("請選擇 flag 編號：")
-		if !ok {
-			return ""
-		}
-		switch isMenuNav(input) {
-		case "back":
-			return "back"
-		case "home":
-			return "home"
-		}
+			option := options[selected-1]
 
-		selected, err := strconv.Atoi(input)
-		if err != nil || selected < 1 || selected > len(options) {
-			showInputErrorAndPause("無效的 flag 編號。")
-			continue
-		}
-		option = options[selected-1]
-		break
-	}
+			var done bool
+			innerErr := runMenuRead(
+				func() {
+					actionLabel := flagActionLabel(setMode)
+					ui.headf(lang.Flags.FlagByFlagAccountTitle, actionLabel)
+					accountOptions := ui.subMenuOptions(func(menuOptions *cliMenuOptions) {
+						for i, acc := range accounts {
+							menuOptions.option(strconv.Itoa(i+1), fmt.Sprintf("%s (%s)", acc.DisplayName, acc.Email), fmt.Sprintf(lang.Flags.FlagComment, account.LaunchFlagsSummary(acc.LaunchFlags)))
+						}
+					})
+					ui.menuBlock(func() {
+						ui.promptf(lang.Flags.FlagByFlagAccountPrompt, actionLabel, option.Name)
+						accountOptions.render()
+					})
+				},
+				func() (string, bool) {
+					return ui.readInputf("%s", lang.Flags.FlagInputPrompt)
+				},
+				func(input string) error {
+					accountIndexes, err := parseSelectionInput(input, len(accounts))
+					if err != nil {
+						showInputErrorAndPause(fmt.Sprintf(lang.Common.ParseFailed, err))
+						return nil
+					}
 
-	actionLabel := flagActionLabel(setMode)
-	for {
-		ui.headf("%s flag：選擇帳號", actionLabel)
-		accountOptions := ui.subMenuOptions(func(menuOptions *cliMenuOptions) {
-			for i, acc := range accounts {
-				menuOptions.option(strconv.Itoa(i+1), fmt.Sprintf("%s (%s)", acc.DisplayName, acc.Email), fmt.Sprintf("flag：%s", account.LaunchFlagsSummary(acc.LaunchFlags)))
+					actionLabel := flagActionLabel(setMode)
+					ui.blankLine()
+					ui.infof(lang.Flags.FlagByFlagAbout, actionLabel, option.Name)
+					for _, idx := range accountIndexes {
+						acc := accounts[idx]
+						ui.rawlnf(lang.Flags.FlagAccountItemFmt, idx+1, acc.DisplayName, acc.Email, account.LaunchFlagsSummary(acc.LaunchFlags))
+					}
+					if !confirmChanges() {
+						ui.infof("%s", lang.Common.Cancelled)
+						ui.blankLine()
+						return nil
+					}
+
+					if err := applyLaunchFlagChanges(accounts, accountsFile, accountIndexes, option.Bit, setMode); err != nil {
+						showInputErrorAndPause(fmt.Sprintf(lang.Flags.SaveFailed, err))
+						return nil
+					}
+
+					ui.successf(lang.Flags.Done, actionLabel)
+					ui.blankLine()
+					done = true
+					return errNavDone
+				},
+			)
+			if errors.Is(innerErr, ErrNavHome) {
+				return ErrNavHome
 			}
-		})
-		ui.menuBlock(func() {
-			ui.promptf("請輸入要%s「%s」的帳號編號，可用 2,4,6 或 1-3,5-7：", actionLabel, option.Name)
-			accountOptions.render()
-		})
-		input, ok := ui.readInputf("請輸入：")
-		if !ok {
-			return ""
-		}
-		switch isMenuNav(input) {
-		case "back":
-			goto selectFlag
-		case "home":
-			return "home"
-		}
-
-		accountIndexes, err := parseSelectionInput(input, len(accounts))
-		if err != nil {
-			showInputErrorAndPause(fmt.Sprintf("解析失敗：%v", err))
-			continue
-		}
-
-		ui.blankLine()
-		ui.infof("即將%s以下帳號的 flag「%s」：", actionLabel, option.Name)
-		for _, idx := range accountIndexes {
-			acc := accounts[idx]
-			ui.rawlnf("  [%d] %s (%s)  目前：%s", idx+1, acc.DisplayName, acc.Email, account.LaunchFlagsSummary(acc.LaunchFlags))
-		}
-		if !confirmChanges() {
-			ui.infof("已取消。")
-			ui.blankLine()
-			return ""
-		}
-
-		if err := applyLaunchFlagChanges(accounts, accountsFile, accountIndexes, option.Bit, setMode); err != nil {
-			showInputErrorAndPause(fmt.Sprintf("儲存失敗：%v", err))
-			continue
-		}
-
-		ui.successf("已完成%s。", actionLabel)
-		ui.blankLine()
-		return ""
-	}
-}
-
-func configureFlagsByAccount(accounts []account.Account, accountsFile string, setMode bool) string {
-	options := account.LaunchFlagOptions()
-	var (
-		accountIndex int
-		acc          account.Account
+			if done {
+				completed = true
+				return errNavDone // exit outer flag-selection loop
+			}
+			return nil // b in account-selection → continue outer (pick another flag)
+		},
 	)
-
-selectAccount:
-	for {
-		ui.headf("%s flag：先選帳號", flagActionLabel(setMode))
-		accountOptions := ui.subMenuOptions(func(menuOptions *cliMenuOptions) {
-			for i, acc := range accounts {
-				menuOptions.option(strconv.Itoa(i+1), fmt.Sprintf("%s (%s)", acc.DisplayName, acc.Email), fmt.Sprintf("flag：%s", account.LaunchFlagsSummary(acc.LaunchFlags)))
-			}
-		})
-		ui.menuBlock(func() {
-			accountOptions.render()
-		})
-		input, ok := ui.readInputf("請選擇帳號編號：")
-		if !ok {
-			return ""
-		}
-		switch isMenuNav(input) {
-		case "back":
-			return "back"
-		case "home":
-			return "home"
-		}
-
-		selected, err := strconv.Atoi(input)
-		if err != nil || selected < 1 || selected > len(accounts) {
-			showInputErrorAndPause("無效的帳號編號。")
-			continue
-		}
-
-		accountIndex = selected - 1
-		acc = accounts[accountIndex]
-		break
+	if errors.Is(err, ErrNavHome) {
+		return ErrNavHome
 	}
+	if completed {
+		return errNavDone // signal mode-select to exit back to set/clear
+	}
+	return nil // b in flag-selection → stay in mode-select
+}
 
-	actionLabel := flagActionLabel(setMode)
-	for {
-		ui.headf("%s flag：選擇旗標", actionLabel)
-		flagOptions := ui.subMenuOptions(func(menuOptions *cliMenuOptions) {
-			for i, option := range options {
-				comment := option.Description
-				if option.Description != "" {
-					comment = fmt.Sprintf("說明：%s", option.Description)
+// configureFlagsByAccount lets the player pick an account then select which flags to apply.
+// Returns nil when the player pressed b at account selection (stay in mode-select),
+// errNavDone on successful apply (exit mode-select, back to set/clear),
+// or ErrNavHome when h is pressed anywhere.
+func configureFlagsByAccount(accounts []account.Account, accountsFile string, setMode bool) error {
+	options := account.LaunchFlagOptions()
+	var completed bool
+
+	err := runMenuRead(
+		func() {
+			ui.headf(lang.Flags.FlagByAccountTitle, flagActionLabel(setMode))
+			accountOptions := ui.subMenuOptions(func(menuOptions *cliMenuOptions) {
+				for i, acc := range accounts {
+					menuOptions.option(strconv.Itoa(i+1), fmt.Sprintf("%s (%s)", acc.DisplayName, acc.Email), fmt.Sprintf(lang.Flags.FlagComment, account.LaunchFlagsSummary(acc.LaunchFlags)))
 				}
-				if option.Experimental {
-					if comment != "" {
-						comment += "，"
+			})
+			ui.menuBlock(func() {
+				accountOptions.render()
+			})
+		},
+		func() (string, bool) {
+			return ui.readInputf("%s", lang.Flags.FlagByAccountSelectPrompt)
+		},
+		func(input string) error {
+			selected, err := strconv.Atoi(input)
+			if err != nil || selected < 1 || selected > len(accounts) {
+				showInputErrorAndPause(lang.Flags.InvalidAccountID)
+				return nil
+			}
+			accountIndex := selected - 1
+			acc := accounts[accountIndex]
+
+			var done bool
+			innerErr := runMenuRead(
+				func() {
+					actionLabel := flagActionLabel(setMode)
+					ui.headf(lang.Flags.FlagByAccountFlagTitle, actionLabel)
+					flagOptions := ui.subMenuOptions(func(menuOptions *cliMenuOptions) {
+						for i, option := range options {
+							comment := ""
+							if option.Description != "" {
+								comment = fmt.Sprintf(lang.Flags.FlagDescPrefix, option.Description)
+							}
+							if option.Experimental {
+								if comment != "" {
+									comment += "，"
+								}
+								comment += lang.Flags.FlagExperimental
+							}
+							menuOptions.option(strconv.Itoa(i+1), option.Name, comment)
+						}
+					})
+					ui.menuBlock(func() {
+						ui.promptf(lang.Flags.FlagByAccountFlagPrompt, acc.DisplayName, actionLabel)
+						flagOptions.render()
+					})
+				},
+				func() (string, bool) {
+					return ui.readInputf("%s", lang.Flags.FlagInputPrompt)
+				},
+				func(input string) error {
+					flagIndexes, err := parseSelectionInput(input, len(options))
+					if err != nil {
+						showInputErrorAndPause(fmt.Sprintf(lang.Common.ParseFailed, err))
+						return nil
 					}
-					comment += "術士版本似乎已失效"
-				}
-				menuOptions.option(strconv.Itoa(i+1), option.Name, comment)
+
+					mask := selectedLaunchFlagMask(flagIndexes, options)
+					actionLabel := flagActionLabel(setMode)
+					ui.blankLine()
+					ui.infof(lang.Flags.FlagByAccountAbout, acc.DisplayName, actionLabel)
+					for _, idx := range flagIndexes {
+						option := options[idx]
+						ui.rawlnf("  [%d] %s（%s）", idx+1, option.Name, option.Description)
+					}
+					if !confirmChanges() {
+						ui.infof("%s", lang.Common.Cancelled)
+						ui.blankLine()
+						return nil
+					}
+
+					if err := applyLaunchFlagChanges(accounts, accountsFile, []int{accountIndex}, mask, setMode); err != nil {
+						showInputErrorAndPause(fmt.Sprintf(lang.Flags.SaveFailed, err))
+						return nil
+					}
+
+					ui.successf(lang.Flags.Done, actionLabel)
+					ui.blankLine()
+					done = true
+					return errNavDone
+				},
+			)
+			if errors.Is(innerErr, ErrNavHome) {
+				return ErrNavHome
 			}
-		})
-		ui.menuBlock(func() {
-			ui.promptf("請輸入要對帳號「%s」%s的 flag 編號，可用 1,3 或 2-4：", acc.DisplayName, actionLabel)
-			flagOptions.render()
-		})
-		input, ok := ui.readInputf("請輸入：")
-		if !ok {
-			return ""
-		}
-		switch isMenuNav(input) {
-		case "back":
-			goto selectAccount
-		case "home":
-			return "home"
-		}
-
-		flagIndexes, err := parseSelectionInput(input, len(options))
-		if err != nil {
-			showInputErrorAndPause(fmt.Sprintf("解析失敗：%v", err))
-			continue
-		}
-
-		mask := selectedLaunchFlagMask(flagIndexes, options)
-		ui.blankLine()
-		ui.infof("即將對帳號「%s」%s以下 flag：", acc.DisplayName, actionLabel)
-		for _, idx := range flagIndexes {
-			option := options[idx]
-			ui.rawlnf("  [%d] %s（%s）", idx+1, option.Name, option.Description)
-		}
-		if !confirmChanges() {
-			ui.infof("已取消。")
-			ui.blankLine()
-			return ""
-		}
-
-		if err := applyLaunchFlagChanges(accounts, accountsFile, []int{accountIndex}, mask, setMode); err != nil {
-			showInputErrorAndPause(fmt.Sprintf("儲存失敗：%v", err))
-			continue
-		}
-
-		ui.successf("已完成%s。", actionLabel)
-		ui.blankLine()
-		return ""
+			if done {
+				completed = true
+				return errNavDone // exit outer account-selection loop
+			}
+			return nil // b in flag-selection → continue outer (pick another account)
+		},
+	)
+	if errors.Is(err, ErrNavHome) {
+		return ErrNavHome
 	}
+	if completed {
+		return errNavDone // signal mode-select to exit back to set/clear
+	}
+	return nil // b in account-selection → stay in mode-select
 }
 
 func applyLaunchFlagChanges(accounts []account.Account, accountsFile string, accountIndexes []int, mask uint32, setMode bool) error {
@@ -361,19 +345,22 @@ func applyLaunchFlagChanges(accounts []account.Account, accountsFile string, acc
 	return nil
 }
 
-func printAccountList(accounts []account.Account) {
-	ui.infof("帳號列表：")
+func printAccountList(accounts []account.Account, label func(account.Account) string) {
+	ui.infof("%s", lang.MainMenu.AccountListHeader)
 	for i, acc := range accounts {
-		status := "未啟動"
-		if isAccountRunning(acc.DisplayName) {
-			status = "已啟動"
-		}
-		ui.rawlnf("[%d] <%s> %-15s (%s) ", i+1, status, acc.DisplayName, acc.Email)
+		ui.rawlnf("[%d] <%s> %-15s (%s)", i+1, label(acc), acc.DisplayName, acc.Email)
 	}
 }
 
+func runningStatusLabel(acc account.Account) string {
+	if isAccountRunning(acc.DisplayName) {
+		return lang.Launch.StatusRunning
+	}
+	return lang.Launch.StatusStopped
+}
+
 func printAccountLaunchFlagTable(accounts []account.Account) {
-	ui.infof("flag 對照表：")
+	ui.infof("%s", lang.Flags.FlagTableHeader)
 	for _, line := range buildAccountLaunchFlagTableLines(accounts) {
 		ui.rawln(line)
 	}
@@ -383,7 +370,7 @@ func buildAccountLaunchFlagTableLines(accounts []account.Account) []string {
 	options := account.LaunchFlagOptions()
 	headerTop := make([]string, 0, len(options)+1)
 	headerBottom := make([]string, 0, len(options)+1)
-	headerTop = append(headerTop, "帳號編號")
+	headerTop = append(headerTop, lang.Flags.FlagTableAccountHeader)
 	headerBottom = append(headerBottom, "")
 	for _, option := range options {
 		title, flag := launchFlagTableHeaderLines(option)

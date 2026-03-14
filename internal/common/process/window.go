@@ -148,6 +148,17 @@ func FindWindowTitlesByPrefix(prefix string) []string {
 	return titles
 }
 
+// GetWindowTitle returns the title text of the given window handle.
+// Returns an empty string if the handle is invalid or the call fails.
+func GetWindowTitle(hwnd windows.Handle) string {
+	buf := make([]uint16, 512)
+	n, _, _ := procGetWindowTextW.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
+	if n == 0 {
+		return ""
+	}
+	return syscall.UTF16ToString(buf[:n])
+}
+
 // GetForegroundHwnd returns the handle of the current foreground window.
 func GetForegroundHwnd() windows.Handle {
 	hwnd, _, _ := procGetForegroundWindow.Call()
