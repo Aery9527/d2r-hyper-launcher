@@ -13,8 +13,8 @@ description: "Handle repository-specific release work in d2r-hyper-launcher. Use
 - `git log <last-tag>..HEAD --oneline` - 彙整自上次 release 以來的所有 commit
 - [cmd/d2r-hyper-launcher/main.go](../../../cmd/d2r-hyper-launcher/main.go) - 確認版本字串與 release 時間由 `-ldflags "-X main.version=... -X main.releaseTime=..."` 注入
 - [README.md](../../../README.md) - 確認目前 build 與玩家可見入口
-- [AGENT.md](../../../AGENT.md) - 測試、文件同步與整體規範
-- `.claude/skills/d2r-commit/SKILL.md` - commit message 與 commit 前檢查的語氣基準
+- [AGENTS.md](../../../AGENTS.md) - 測試、文件同步與整體規範
+- `.agents/skills/d2r-commit/SKILL.md` - commit message 與 commit 前檢查的語氣基準
 
 ## release 前一定要做的事
 
@@ -28,7 +28,7 @@ description: "Handle repository-specific release work in d2r-hyper-launcher. Use
    - 覆蓋 repo 根目錄的 `d2r-hyper-launcher.exe`
    - 新增一份 release note
    - 同步更新 `README.md` 內顯示的目前最新版本
-   - 若這次 release 含有 repo 結構或玩家 workflow 調整，也要確認相關 `.claude/skills/d2r-*.md` 沒有留著過期指引
+   - 若這次 release 含有 repo 結構或玩家 workflow 調整，也要確認相關 `.agents/skills/d2r-*` 沒有留著過期指引
    - 完成後 merge 到 `master`
    - 最後建立一個新的 git tag
 

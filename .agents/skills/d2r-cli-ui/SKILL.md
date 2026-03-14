@@ -44,7 +44,7 @@ description: "Handle repository-specific CLI UI and message-presentation work in
 - 若需要 option 對齊，先把選項收進 `cliMenuOptions`，並優先把補充資訊放進 `comment` 欄位；不要在 label 內硬塞一長串括號後又自己猜最長寬度。
 - 若涉及全形字、中文 key、或 icon 對齊，使用 `displayWidth(...)` 邏輯；不要回退成 `utf8.RuneCountInString(...)`。
 - announcement / header / menu 文案調整時，確認 `ui_test.go` 與 `main_test.go` 的預期仍反映最新 UX。
-- 主選單與子選單的顯示變更，若影響玩家理解流程，需同步檢查 `README.md`、`docs/` 與 `AGENT.md` 是否要更新。
+- 主選單與子選單的顯示變更，若影響玩家理解流程，需同步檢查 `README.md`、`docs/` 與 `AGENTS.md` 是否要更新。
 
 ## 常見任務做法
 
