@@ -23,7 +23,7 @@
 
 追蹤方式：
 
-- plan：`refactor-plan/cli-refactor.md`
+- plan：`plan/cli-refactor.md`
 - branch：`refactor/cli-internal-boundaries`
 - 主要實作 commit：`0926411` `refactor(repo): realign CLI and feature boundaries`
 - skill 同步 commit：`6c7a6ae` `docs(skills): align D2R workflows with new boundaries`
