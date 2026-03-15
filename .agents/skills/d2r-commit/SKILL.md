@@ -7,9 +7,34 @@ description: "Handle repository-specific git commit work in d2r-hyper-launcher. 
 
 這個 skill 專注在本 repo 的 commit 準備與 commit message 撰寫。重點不是逐條描述改了哪些程式碼，而是用高階語意表達「這次變更想達成什麼」以及「影響哪個 scope」。
 
+## 特殊檔案：`task.txt`
+
+repo 根目錄的 `task.txt` 是**臨時描述任務用的檔案**。它需要保留在 Git repo 裡作為固定檔名的 scratch file，但**本機日常修改不應該混進一般 commit**。
+
+處理原則：
+
+1. 若 `task.txt` 在 commit 準備時出現 local 變更，而這次 commit 並不是要更新 repo 裡的基線內容，先執行：
+
+   ```powershell
+   git update-index --skip-worktree -- task.txt
+   ```
+
+   讓本機暫存內容留在工作目錄，但不要再被正常的 `git status` / `git add -A` / `git commit` 流程納入。
+
+2. 若這次**就是要更新 repo 版的 `task.txt`**，先清掉 skip-worktree：
+
+   ```powershell
+   git update-index --no-skip-worktree -- task.txt
+   ```
+
+   然後再檢查 diff、明確 stage、commit；完成後若仍希望本機後續忽略變更，再重新套回 `--skip-worktree`。
+
+3. 不要用 `git rm --cached task.txt`；那會把這個檔案從版本控制中移除，與需求相反。
+
 ## 先看哪些內容
 
 - `git status` / `git diff --stat` / `git diff` - 確認實際變更範圍
+- `git ls-files -v -- task.txt` - 確認 `task.txt` 目前是否已套用 `skip-worktree`
 - [AGENTS.md](../../../AGENTS.md) - 專案規範、測試原則、文件同步原則
 - [README.md](../../../README.md) 與 `docs/` - 判斷是否有使用者可見行為改動
 - `.agents/skills/` - 判斷既有 skill 是否也要同步更新
@@ -105,12 +130,14 @@ download flow first while still preserving deeper references.
 
 1. 看 `git status`
 2. 看 `git diff --stat` 與必要的 `git diff`
-3. 判斷是否符合文件 / 註解例外；若不符合就跑測試
-4. 確認文件與 skill 是否已同步
-5. 撰寫高階語意的 commit message
-6. 執行 `git commit`
-7. 直接 `git push`
-8. 若 push 失敗且涉及同步衝突，通知使用者 review，不要自作主張解 conflict
+3. 若 `task.txt` 是本機暫存內容而非本次 commit 目標，先執行 `git update-index --skip-worktree -- task.txt`
+4. 若這次要提交 `task.txt` 的 repo 基線內容，先執行 `git update-index --no-skip-worktree -- task.txt`
+5. 判斷是否符合文件 / 註解例外；若不符合就跑測試
+6. 確認文件與 skill 是否已同步
+7. 撰寫高階語意的 commit message
+8. 執行 `git commit`
+9. 直接 `git push`
+10. 若 push 失敗且涉及同步衝突，通知使用者 review，不要自作主張解 conflict
 
 若在這個環境實際建立 commit，commit message 最後要加上：
 
