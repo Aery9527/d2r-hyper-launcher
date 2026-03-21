@@ -191,17 +191,23 @@ func TestBatchAccountStatusLinesShowsRunningAndPendingAccounts(t *testing.T) {
 
 func TestLaunchTargetAccountLinesShowsAccountsToLaunch(t *testing.T) {
 	accounts := []*account.Account{
-		{DisplayName: "Alpha", Email: "alpha@example.com"},
-		{DisplayName: "Bravo", Email: "bravo@example.com"},
+		{DisplayName: "Alpha", Email: "alpha@example.com", GraphicsProfile: "1080p-low", DefaultRegion: "EU", DefaultMod: mods.DefaultModVanilla},
+		{DisplayName: "Bravo", Email: "bravo@example.com", DefaultMod: "sample-mod"},
 	}
 
-	lines := launchTargetAccountLines(accounts)
+	lines := launchTargetAccountLines(accounts, []string{"sample-mod"})
 
 	assert.Len(t, lines, 2)
 	assert.Contains(t, lines[0], "Alpha")
 	assert.Contains(t, lines[0], "alpha@example.com")
+	assert.Contains(t, lines[0], "EU")
+	assert.Contains(t, lines[0], lang.DefaultMods.StatusVanilla)
+	assert.Contains(t, lines[0], "1080p-low")
 	assert.Contains(t, lines[1], "Bravo")
 	assert.Contains(t, lines[1], "bravo@example.com")
+	assert.Contains(t, lines[1], lang.RegionDefaults.StatusUnassigned)
+	assert.Contains(t, lines[1], "sample-mod")
+	assert.Contains(t, lines[1], lang.GraphicsProfiles.StatusUnassigned)
 }
 
 func TestPrintMenuKeepsChoicePromptInsideOptionGroup(t *testing.T) {
@@ -948,7 +954,7 @@ func TestPromptLaunchRegionKeepsCurrentMenuAfterInvalidInput(t *testing.T) {
 		withTestInput(t, "x\n\nb\n", func() {
 			choice, ok := promptLaunchRegion("啟動指定帳號：選擇區域", []*account.Account{
 				{DisplayName: "Alpha", Email: "alpha@example.com"},
-			})
+			}, nil)
 			assert.False(t, ok)
 			assert.Nil(t, choice.ManualRegion)
 			assert.False(t, choice.UseDefaults)
@@ -963,8 +969,8 @@ func TestPromptLaunchRegionShowsSingleTargetAccount(t *testing.T) {
 	output := captureStdout(t, func() {
 		withTestInput(t, "b\n", func() {
 			choice, ok := promptLaunchRegion("啟動指定帳號：選擇區域", []*account.Account{
-				{DisplayName: "Alpha", Email: "alpha@example.com"},
-			})
+				{DisplayName: "Alpha", Email: "alpha@example.com", GraphicsProfile: "1080p-low", DefaultRegion: "EU", DefaultMod: mods.DefaultModVanilla},
+			}, []string{"sample-mod"})
 			assert.False(t, ok)
 			assert.Nil(t, choice.ManualRegion)
 			assert.False(t, choice.UseDefaults)
@@ -973,6 +979,9 @@ func TestPromptLaunchRegionShowsSingleTargetAccount(t *testing.T) {
 
 	assert.Contains(t, output, "Alpha")
 	assert.Contains(t, output, "alpha@example.com")
+	assert.Contains(t, output, "EU")
+	assert.Contains(t, output, lang.DefaultMods.StatusVanilla)
+	assert.Contains(t, output, "1080p-low")
 	assert.Equal(t, 1, countMenuBlocksWithKeys(output, []string{"1", "2", "3", "b", "h", "q"}))
 }
 
@@ -980,9 +989,9 @@ func TestPromptLaunchRegionShowsBatchTargetAccounts(t *testing.T) {
 	output := captureStdout(t, func() {
 		withTestInput(t, "b\n", func() {
 			choice, ok := promptLaunchRegion("啟動所有帳號：選擇區域", []*account.Account{
-				{DisplayName: "Alpha", Email: "alpha@example.com"},
-				{DisplayName: "Bravo", Email: "bravo@example.com"},
-			})
+				{DisplayName: "Alpha", Email: "alpha@example.com", GraphicsProfile: "1080p-low", DefaultRegion: "NA", DefaultMod: mods.DefaultModVanilla},
+				{DisplayName: "Bravo", Email: "bravo@example.com", GraphicsProfile: "1440p-high", DefaultRegion: "EU", DefaultMod: "sample-mod"},
+			}, []string{"sample-mod"})
 			assert.False(t, ok)
 			assert.Nil(t, choice.ManualRegion)
 			assert.False(t, choice.UseDefaults)
@@ -993,6 +1002,12 @@ func TestPromptLaunchRegionShowsBatchTargetAccounts(t *testing.T) {
 	assert.Contains(t, output, "alpha@example.com")
 	assert.Contains(t, output, "Bravo")
 	assert.Contains(t, output, "bravo@example.com")
+	assert.Contains(t, output, "NA")
+	assert.Contains(t, output, "EU")
+	assert.Contains(t, output, lang.DefaultMods.StatusVanilla)
+	assert.Contains(t, output, "sample-mod")
+	assert.Contains(t, output, "1080p-low")
+	assert.Contains(t, output, "1440p-high")
 	assert.Equal(t, 1, countMenuBlocksWithKeys(output, []string{"1", "2", "3", "b", "h", "q"}))
 }
 
@@ -1000,7 +1015,7 @@ func TestPromptLaunchRegionEnterUsesStoredDefaultMode(t *testing.T) {
 	withTestInput(t, "\n", func() {
 		choice, ok := promptLaunchRegion("啟動指定帳號：選擇區域", []*account.Account{
 			{DisplayName: "Alpha", Email: "alpha@example.com", DefaultRegion: "EU"},
-		})
+		}, nil)
 		assert.True(t, ok)
 		assert.True(t, choice.UseDefaults)
 		assert.Nil(t, choice.ManualRegion)
@@ -1019,7 +1034,8 @@ func TestPromptLaunchRegionEnterRequiresDefaultsForAllTargets(t *testing.T) {
 			choice, ok := promptLaunchRegion("啟動所有帳號：選擇區域", []*account.Account{
 				{DisplayName: "Alpha", Email: "alpha@example.com", DefaultRegion: "NA"},
 				{DisplayName: "Bravo", Email: "bravo@example.com"},
-			})
+				{DisplayName: "Charlie", Email: "charlie@example.com"},
+			}, nil)
 			assert.False(t, ok)
 			assert.False(t, choice.UseDefaults)
 			assert.Nil(t, choice.ManualRegion)
@@ -1027,7 +1043,9 @@ func TestPromptLaunchRegionEnterRequiresDefaultsForAllTargets(t *testing.T) {
 	})
 
 	assert.Equal(t, 1, strings.Count(output, ui.prefix(uiMessageError)+" "))
-	assert.Contains(t, output, "Bravo")
+	assert.Contains(t, output, "- Bravo")
+	assert.Contains(t, output, "- Charlie")
+	assert.NotContains(t, output, "Bravo, Charlie")
 	assert.Equal(t, 2, countMenuBlocksWithKeys(output, []string{"1", "2", "3", "b", "h", "q"}))
 }
 
@@ -1035,7 +1053,7 @@ func TestPromptLaunchRegionAllowsManualOverrideWithoutStoredDefaults(t *testing.
 	withTestInput(t, "2\n", func() {
 		choice, ok := promptLaunchRegion("啟動指定帳號：選擇區域", []*account.Account{
 			{DisplayName: "Alpha", Email: "alpha@example.com"},
-		})
+		}, nil)
 		assert.True(t, ok)
 		if assert.NotNil(t, choice.ManualRegion) {
 			assert.Equal(t, "EU", choice.ManualRegion.Name)
@@ -1084,7 +1102,33 @@ func TestPromptLaunchModShowsBatchTargetAccounts(t *testing.T) {
 	assert.Contains(t, output, "alpha@example.com")
 	assert.Contains(t, output, "Bravo")
 	assert.Contains(t, output, "bravo@example.com")
+	assert.Contains(t, output, lang.RegionDefaults.StatusUnassigned)
+	assert.Contains(t, output, lang.DefaultMods.StatusUnassigned)
+	assert.Contains(t, output, lang.GraphicsProfiles.StatusUnassigned)
 	assert.Equal(t, 1, countMenuBlocksWithKeys(output, []string{"0", "1", "b", "h", "q"}))
+}
+
+func TestPromptLaunchModShowsPreparedDefaultsForTargets(t *testing.T) {
+	accounts := []account.Account{
+		{DisplayName: "Alpha", Email: "alpha@example.com", GraphicsProfile: "1080p-low", DefaultRegion: "NA", DefaultMod: mods.DefaultModVanilla},
+		{DisplayName: "Bravo", Email: "bravo@example.com", GraphicsProfile: "1440p-high", DefaultRegion: "EU", DefaultMod: "sample-mod"},
+	}
+
+	output := captureStdout(t, func() {
+		withTestInput(t, "b\n", func() {
+			choice, ok := promptLaunchMod("啟動所有帳號：選擇 mod", accounts, filepath.Join(t.TempDir(), "accounts.csv"), []*account.Account{&accounts[0], &accounts[1]}, []string{"sample-mod"})
+			assert.False(t, ok)
+			assert.False(t, choice.UseDefaults)
+			assert.False(t, choice.HasManual)
+		})
+	})
+
+	assert.Contains(t, output, "NA")
+	assert.Contains(t, output, "EU")
+	assert.Contains(t, output, lang.DefaultMods.StatusVanilla)
+	assert.Contains(t, output, "sample-mod")
+	assert.Contains(t, output, "1080p-low")
+	assert.Contains(t, output, "1440p-high")
 }
 
 func TestPromptLaunchModEnterUsesStoredDefaultMode(t *testing.T) {
@@ -1112,13 +1156,14 @@ func TestPromptLaunchModEnterRequiresDefaultsForAllTargets(t *testing.T) {
 	accounts := []account.Account{
 		{DisplayName: "Alpha", Email: "alpha@example.com", DefaultMod: mods.DefaultModVanilla},
 		{DisplayName: "Bravo", Email: "bravo@example.com"},
+		{DisplayName: "Charlie", Email: "charlie@example.com"},
 	}
 	accountsFile := filepath.Join(t.TempDir(), "accounts.csv")
 	assert.NoError(t, account.SaveAccounts(accountsFile, accounts))
 
 	output := captureStdout(t, func() {
 		withTestInput(t, "\n\nb\n", func() {
-			choice, ok := promptLaunchMod("啟動所有帳號：選擇 mod", accounts, accountsFile, []*account.Account{&accounts[0], &accounts[1]}, []string{"sample-mod"})
+			choice, ok := promptLaunchMod("啟動所有帳號：選擇 mod", accounts, accountsFile, []*account.Account{&accounts[0], &accounts[1], &accounts[2]}, []string{"sample-mod"})
 			assert.False(t, ok)
 			assert.False(t, choice.UseDefaults)
 			assert.False(t, choice.HasManual)
@@ -1126,7 +1171,9 @@ func TestPromptLaunchModEnterRequiresDefaultsForAllTargets(t *testing.T) {
 	})
 
 	assert.Equal(t, 1, strings.Count(output, ui.prefix(uiMessageError)+" "))
-	assert.Contains(t, output, "Bravo")
+	assert.Contains(t, output, "- Bravo")
+	assert.Contains(t, output, "- Charlie")
+	assert.NotContains(t, output, "Bravo, Charlie")
 	assert.Equal(t, 2, countMenuBlocksWithKeys(output, []string{"0", "1", "b", "h", "q"}))
 }
 

@@ -188,13 +188,14 @@ type LaunchCatalog struct {
 	OfflineLaunchFailed string // fmt("%v")
 
 	// Region selector
-	RegionSingleTitle string // heading for single-account region pick
-	RegionBatchTitle  string // heading for batch-launch region pick
-	RegionTargetLabel string // "準備啟動的帳號："
-	RegionInvalid     string
-	RegionUseDefaults string
-	RegionOverride    string
-	RegionMissing     string // fmt("%s")
+	RegionSingleTitle    string // heading for single-account region pick
+	RegionBatchTitle     string // heading for batch-launch region pick
+	RegionTargetLabel    string // "準備啟動的帳號："
+	TargetDefaultSummary string // fmt("%s", "%s", "%s", "%s")
+	RegionInvalid        string
+	RegionUseDefaults    string
+	RegionOverride       string
+	RegionMissing        string // fmt("%s")
 
 	// Mod selector
 	ModSingleTitle  string

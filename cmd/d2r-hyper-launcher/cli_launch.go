@@ -42,12 +42,12 @@ func launchAccount(acc *account.Account, accounts []account.Account, accountsFil
 		return
 	}
 
-	regionChoice, ok := promptLaunchRegion(lang.Launch.RegionSingleTitle, []*account.Account{acc})
+	installedMods, ok := discoverInstalledMods(cfg.D2RPath)
 	if !ok {
 		return
 	}
 
-	installedMods, ok := discoverInstalledMods(cfg.D2RPath)
+	regionChoice, ok := promptLaunchRegion(lang.Launch.RegionSingleTitle, []*account.Account{acc}, installedMods)
 	if !ok {
 		return
 	}
@@ -71,13 +71,13 @@ func launchAccount(acc *account.Account, accounts []account.Account, accountsFil
 
 	region := resolveLaunchRegionChoice(regionChoice, *acc)
 	if region == nil {
-		showInputErrorAndPause(fmt.Sprintf(lang.Launch.RegionMissing, launchTargetAccountLabel(acc)))
+		showInputErrorAndPause(formatLaunchMissingAccountsMessage(lang.Launch.RegionMissing, []string{launchTargetAccountLabel(acc)}))
 		return
 	}
 
 	modArgs, modOK := resolveLaunchModChoice(modChoice, *acc, installedMods)
 	if !modOK {
-		showInputErrorAndPause(fmt.Sprintf(lang.Launch.ModMissing, launchTargetAccountLabel(acc)))
+		showInputErrorAndPause(formatLaunchMissingAccountsMessage(lang.Launch.ModMissing, []string{launchTargetAccountLabel(acc)}))
 		return
 	}
 
@@ -118,12 +118,12 @@ func launchAll(accounts []account.Account, accountsFile string, cfg *config.Conf
 	}
 	ui.infof(lang.Launch.BatchOnlyPending, len(pendingAccounts))
 
-	regionChoice, ok := promptLaunchRegion(lang.Launch.RegionBatchTitle, pendingAccounts)
+	installedMods, ok := discoverInstalledMods(cfg.D2RPath)
 	if !ok {
 		return
 	}
 
-	installedMods, ok := discoverInstalledMods(cfg.D2RPath)
+	regionChoice, ok := promptLaunchRegion(lang.Launch.RegionBatchTitle, pendingAccounts, installedMods)
 	if !ok {
 		return
 	}
@@ -150,13 +150,13 @@ func launchAll(accounts []account.Account, accountsFile string, cfg *config.Conf
 
 		region := resolveLaunchRegionChoice(regionChoice, *acc)
 		if region == nil {
-			ui.warningf(lang.Launch.RegionMissing, launchTargetAccountLabel(acc))
+			ui.warningf("%s", formatLaunchMissingAccountsMessage(lang.Launch.RegionMissing, []string{launchTargetAccountLabel(acc)}))
 			continue
 		}
 
 		modArgs, modOK := resolveLaunchModChoice(modChoice, *acc, installedMods)
 		if !modOK {
-			ui.warningf(lang.Launch.ModMissing, launchTargetAccountLabel(acc))
+			ui.warningf("%s", formatLaunchMissingAccountsMessage(lang.Launch.ModMissing, []string{launchTargetAccountLabel(acc)}))
 			continue
 		}
 
@@ -240,16 +240,16 @@ func launchOffline(cfg *config.Config) {
 	ui.blankLine()
 }
 
-func promptLaunchRegion(title string, accounts []*account.Account) (launchRegionChoice, bool) {
+func promptLaunchRegion(title string, accounts []*account.Account, installedMods []string) (launchRegionChoice, bool) {
 	var result launchRegionChoice
 	_ = runMenu(func() {
 		ui.headf("%s", title)
-		ui.infof("%s", lang.Launch.RegionTargetLabel)
-		for _, line := range launchTargetAccountLines(accounts) {
-			ui.rawln(line)
-		}
 		ui.infof("%s", lang.Launch.RegionUseDefaults)
 		ui.infof("%s", lang.Launch.RegionOverride)
+		ui.infof("%s", lang.Launch.RegionTargetLabel)
+		for _, line := range launchTargetAccountLines(accounts, installedMods) {
+			ui.rawln(line)
+		}
 		options := ui.subMenuOptions(func(options *cliMenuOptions) {
 			options.option("1", "NA", "")
 			options.option("2", "EU", "")
@@ -262,7 +262,7 @@ func promptLaunchRegion(title string, accounts []*account.Account) (launchRegion
 		if strings.TrimSpace(input) == "" {
 			missing := missingDefaultRegionAccountLabels(accounts)
 			if len(missing) > 0 {
-				showInputErrorAndPause(fmt.Sprintf(lang.Launch.RegionMissing, strings.Join(missing, ", ")))
+				showInputErrorAndPause(formatLaunchMissingAccountsMessage(lang.Launch.RegionMissing, missing))
 				return nil
 			}
 			result.UseDefaults = true
@@ -285,7 +285,7 @@ func promptLaunchMod(title string, accounts []account.Account, accountsFile stri
 	_ = runMenu(func() {
 		ui.headf("%s", title)
 		ui.infof("%s", lang.Launch.RegionTargetLabel)
-		for _, line := range launchTargetAccountLines(targets) {
+		for _, line := range launchTargetAccountLines(targets, installedMods) {
 			ui.rawln(line)
 		}
 		ui.infof("%s", lang.Launch.ModUseDefaults)
@@ -304,7 +304,7 @@ func promptLaunchMod(title string, accounts []account.Account, accountsFile stri
 			}
 			missing := missingDefaultModAccountLabels(targets, installedMods)
 			if len(missing) > 0 {
-				showInputErrorAndPause(fmt.Sprintf(lang.Launch.ModMissing, strings.Join(missing, ", ")))
+				showInputErrorAndPause(formatLaunchMissingAccountsMessage(lang.Launch.ModMissing, missing))
 				return nil
 			}
 			result.UseDefaults = true
@@ -328,15 +328,37 @@ func promptLaunchMod(title string, accounts []account.Account, accountsFile stri
 	return result, result.UseDefaults || result.HasManual
 }
 
-func launchTargetAccountLines(accounts []*account.Account) []string {
+func launchTargetAccountLines(accounts []*account.Account, installedMods []string) []string {
 	lines := make([]string, 0, len(accounts))
 	for _, acc := range accounts {
 		if acc == nil {
 			continue
 		}
-		lines = append(lines, fmt.Sprintf("  %s", launchTargetAccountLabel(acc)))
+		lines = append(lines, fmt.Sprintf(
+			lang.Launch.TargetDefaultSummary,
+			launchTargetAccountLabel(acc),
+			defaultRegionStatusLabel(*acc),
+			defaultModStatusLabel(*acc, installedMods),
+			graphicsProfileStatusLabel(*acc),
+		))
 	}
 	return lines
+}
+
+func formatLaunchMissingAccountsMessage(template string, labels []string) string {
+	return fmt.Sprintf(template, formatLaunchMissingAccountLines(labels))
+}
+
+func formatLaunchMissingAccountLines(labels []string) string {
+	lines := make([]string, 0, len(labels))
+	for _, label := range labels {
+		trimmed := strings.TrimSpace(label)
+		if trimmed == "" {
+			continue
+		}
+		lines = append(lines, "  - "+trimmed)
+	}
+	return strings.Join(lines, "\n")
 }
 
 func missingDefaultRegionAccountLabels(accounts []*account.Account) []string {
