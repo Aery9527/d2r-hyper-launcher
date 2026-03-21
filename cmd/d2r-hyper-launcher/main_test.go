@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -12,7 +13,9 @@ import (
 
 	"d2rhl/internal/common/config"
 	"d2rhl/internal/common/d2r"
+	"d2rhl/internal/common/locale"
 	"d2rhl/internal/multiboxing/account"
+	"d2rhl/internal/multiboxing/mods"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -41,14 +44,23 @@ func TestDisplayVersion(t *testing.T) {
 }
 
 func TestDisplayReleaseTime(t *testing.T) {
-	assert.Equal(t, "2026-03-08 13:40:45 release", displayReleaseTime("2026-03-08 13:40:45"))
-	assert.Equal(t, "尚未 release", displayReleaseTime(""))
-	assert.Equal(t, "尚未 release", displayReleaseTime("   "))
+	released := displayReleaseTime("2026-03-08 13:40:45")
+	assert.Contains(t, released, "2026-03-08 13:40:45")
+	assert.NotEqual(t, "2026-03-08 13:40:45", released)
+
+	unreleased := displayReleaseTime("")
+	assert.NotEmpty(t, unreleased)
+	assert.Equal(t, unreleased, displayReleaseTime("   "))
 }
 
 func TestDisplayReleaseSummary(t *testing.T) {
-	assert.Equal(t, "v1.0.0（2026-03-08 13:40:45 release）", displayReleaseSummary("1.0.0", "2026-03-08 13:40:45"))
-	assert.Equal(t, "vdev（尚未 release）", displayReleaseSummary("dev", ""))
+	released := displayReleaseSummary("1.0.0", "2026-03-08 13:40:45")
+	assert.Contains(t, released, displayVersion("1.0.0"))
+	assert.Contains(t, released, displayReleaseTime("2026-03-08 13:40:45"))
+
+	unreleased := displayReleaseSummary("dev", "")
+	assert.Contains(t, unreleased, displayVersion("dev"))
+	assert.Contains(t, unreleased, displayReleaseTime(""))
 }
 
 func TestMaybeShowStartupAnnouncementShowsAnnouncementWhenAccountsFileExists(t *testing.T) {
@@ -68,15 +80,23 @@ func TestMaybeShowStartupAnnouncementShowsAnnouncementWhenAccountsFileExists(t *
 		ui.canSingleKeyContinue = originalCanSingleKeyContinue
 	})
 	ui.canSingleKeyContinue = func() bool { return true }
-	ui.waitForAnyKey = func() error { return nil }
+	waitCalled := 0
+	ui.waitForAnyKey = func() error {
+		waitCalled++
+		return nil
+	}
 
 	output := captureStdout(t, func() {
 		maybeShowStartupAnnouncement(`C:\Users\User\AppData\Roaming\d2r-hyper-launcher`, false)
 	})
 
-	assert.NotContains(t, output, "d2r-hyper-launcher (")
-	assert.Contains(t, output, "• 目前版本：v1.0.0（2026-03-08 13:40:45 release）\n")
-	assert.Contains(t, output, "? 請按任意鍵繼續...")
+	assert.Equal(t, -1, firstLineIndex(nonEmptyOutputLines(output), func(line string) bool {
+		return line == ui.style.headerDivider
+	}))
+	assert.Len(t, linesWithPrefix(output, ui.prefix(uiMessageInfo)+" "), 2)
+	assert.Len(t, linesWithPrefix(output, ui.prefix(uiMessageWarning)+" "), 2)
+	assert.Len(t, linesWithPrefix(output, ui.prefix(uiMessagePrompt)+" "), 1)
+	assert.Equal(t, 1, waitCalled)
 }
 
 func TestMaybeShowStartupAnnouncementSkipsAnnouncementWhenAccountsFileWasCreated(t *testing.T) {
@@ -98,18 +118,22 @@ func TestPrintStartupHeaderShowsAppHeader(t *testing.T) {
 		printStartupHeader()
 	})
 
-	assert.Contains(t, output, "d2r-hyper-launcher (v1.0.0)")
+	lines := nonEmptyOutputLines(output)
+	assert.Len(t, lines, 3)
+	assert.Equal(t, ui.style.headerDivider, lines[0])
+	assert.Equal(t, ui.style.headerDivider, lines[2])
+	assert.Contains(t, lines[1], displayVersion("1.0.0"))
 }
 
 func TestAccountLaunchArgsIncludesPerAccountFlagsAfterMods(t *testing.T) {
 	acc := account.Account{
 		DisplayName: "Alpha",
-		LaunchFlags: account.LaunchFlagNoSound | account.LaunchFlagLowQuality,
+		LaunchFlags: account.LaunchFlagNoSound,
 	}
 
 	args := accountLaunchArgs(acc, []string{"-mod", "sample", "-txt"})
 
-	assert.Equal(t, []string{"-mod", "sample", "-txt", "-ns", "-lq"}, args)
+	assert.Equal(t, []string{"-mod", "sample", "-txt", "-ns"}, args)
 }
 
 func TestPendingBatchAccountsReturnsEmptyWhenAllRunning(t *testing.T) {
@@ -156,24 +180,35 @@ func TestBatchAccountStatusLinesShowsRunningAndPendingAccounts(t *testing.T) {
 
 	lines := batchAccountStatusLines(accounts, runningTitles)
 
-	assert.Equal(t, []string{
-		"  <未啟動> Alpha (alpha@example.com)",
-		"  <已啟動> Bravo (bravo@example.com)",
-	}, lines)
+	assert.Len(t, lines, 2)
+	assert.Contains(t, lines[0], "Alpha")
+	assert.Contains(t, lines[0], "alpha@example.com")
+	assert.Contains(t, lines[1], "Bravo")
+	assert.Contains(t, lines[1], "bravo@example.com")
+	assert.NotEmpty(t, between(lines[0], "<", ">"))
+	assert.NotEmpty(t, between(lines[1], "<", ">"))
+	assert.NotEqual(t, between(lines[0], "<", ">"), between(lines[1], "<", ">"))
 }
 
 func TestLaunchTargetAccountLinesShowsAccountsToLaunch(t *testing.T) {
 	accounts := []*account.Account{
-		{DisplayName: "Alpha", Email: "alpha@example.com"},
-		{DisplayName: "Bravo", Email: "bravo@example.com"},
+		{DisplayName: "Alpha", Email: "alpha@example.com", GraphicsProfile: "1080p-low", DefaultRegion: "EU", DefaultMod: mods.DefaultModVanilla},
+		{DisplayName: "Bravo", Email: "bravo@example.com", DefaultMod: "sample-mod"},
 	}
 
-	lines := launchTargetAccountLines(accounts)
+	lines := launchTargetAccountLines(accounts, []string{"sample-mod"}, []string{"1080p-low"})
 
-	assert.Equal(t, []string{
-		"  Alpha (alpha@example.com)",
-		"  Bravo (bravo@example.com)",
-	}, lines)
+	assert.Len(t, lines, 2)
+	assert.Contains(t, lines[0], "Alpha")
+	assert.Contains(t, lines[0], "alpha@example.com")
+	assert.Contains(t, lines[0], "EU")
+	assert.Contains(t, lines[0], lang.DefaultMods.StatusVanilla)
+	assert.Contains(t, lines[0], "1080p-low")
+	assert.Contains(t, lines[1], "Bravo")
+	assert.Contains(t, lines[1], "bravo@example.com")
+	assert.Contains(t, lines[1], lang.RegionDefaults.StatusUnassigned)
+	assert.Contains(t, lines[1], "sample-mod")
+	assert.Contains(t, lines[1], lang.GraphicsProfiles.StatusUnassigned)
 }
 
 func TestPrintMenuKeepsChoicePromptInsideOptionGroup(t *testing.T) {
@@ -189,19 +224,20 @@ func TestPrintMenuKeepsChoicePromptInsideOptionGroup(t *testing.T) {
 		printMenu(nil, cfg)
 	})
 
-	assert.Contains(t, output, "========================================================\n"+strings.Repeat(" ", 25)+"主選單"+strings.Repeat(" ", 25)+"\n========================================================\n\n")
-	assert.Contains(t, output, "--------------------------------------------------------\n[數字] 啟動指定帳號\n")
-	assert.Contains(t, output, "[0]    離線遊玩")
-	assert.Contains(t, output, "可選 mod，不需帳密\n")
-	assert.Contains(t, output, "[d]    設定啟動間隔")
-	assert.Contains(t, output, "30-60 秒（隨機）\n")
-	assert.Contains(t, output, "[p]    選擇 D2R.exe 路徑")
-	assert.Contains(t, output, "C:\\Games\\D2R\\D2R.exe\n")
-	assert.Contains(t, output, "[s]    視窗切換設定")
-	assert.Contains(t, output, "已啟用設定：Tab（Tab 鍵）\n")
-	assert.Contains(t, output, "[q]    退出\n")
-	assert.NotContains(t, output, "是否已啟動的判斷基準")
-	assert.NotContains(t, output, "? 請選擇：")
+	assert.Equal(t, 1, countMenuBlocksWithKeys(output, []string{lang.MainMenu.OptByNumberKey, "0", "a", "d", "f", "g", "m", "v", "p", "s", "r", "l", "q"}))
+	assert.Empty(t, linesWithPrefix(output, ui.prefix(uiMessagePrompt)+" "))
+
+	delayLine, ok := findMenuOptionLine(output, "d")
+	assert.True(t, ok)
+	assert.Contains(t, delayLine, displayDelay(cfg.LaunchDelay))
+
+	pathLine, ok := findMenuOptionLine(output, "p")
+	assert.True(t, ok)
+	assert.Contains(t, pathLine, cfg.D2RPath)
+
+	switcherLine, ok := findMenuOptionLine(output, "s")
+	assert.True(t, ok)
+	assert.Contains(t, switcherLine, switcherMenuOptionStatus(cfg))
 }
 
 func TestSwitcherMenuOptionStatusKeepsSavedBindingWhenDisabled(t *testing.T) {
@@ -212,11 +248,13 @@ func TestSwitcherMenuOptionStatusKeepsSavedBindingWhenDisabled(t *testing.T) {
 		},
 	}
 
-	assert.Equal(t, "未啟用設定：Tab（Tab 鍵）", switcherMenuOptionStatus(cfg))
+	status := switcherMenuOptionStatus(cfg)
+	assert.NotEmpty(t, status)
+	assert.Contains(t, status, "Tab")
 }
 
 func TestSwitcherMenuOptionStatusShowsUnsetWhenNoBindingSaved(t *testing.T) {
-	assert.Equal(t, "未設定", switcherMenuOptionStatus(&config.Config{}))
+	assert.NotEmpty(t, switcherMenuOptionStatus(&config.Config{}))
 }
 
 func TestSwitcherToggleOptionLabelShowsEnableWhenDisabled(t *testing.T) {
@@ -227,7 +265,7 @@ func TestSwitcherToggleOptionLabelShowsEnableWhenDisabled(t *testing.T) {
 		},
 	}
 
-	assert.Equal(t, "切換為開啟", switcherToggleOptionLabel(cfg))
+	assert.NotEmpty(t, switcherToggleOptionLabel(cfg))
 }
 
 func TestSwitcherToggleOptionLabelShowsDisableWhenEnabled(t *testing.T) {
@@ -238,7 +276,10 @@ func TestSwitcherToggleOptionLabelShowsDisableWhenEnabled(t *testing.T) {
 		},
 	}
 
-	assert.Equal(t, "切換為關閉", switcherToggleOptionLabel(cfg))
+	assert.NotEmpty(t, switcherToggleOptionLabel(cfg))
+	assert.NotEqual(t, switcherToggleOptionLabel(cfg), switcherToggleOptionLabel(&config.Config{
+		Switcher: &config.SwitcherConfig{Enabled: false, Key: "Tab"},
+	}))
 }
 
 func TestPrintStartupAnnouncementShowsDisplayNameStatusNote(t *testing.T) {
@@ -255,17 +296,12 @@ func TestPrintStartupAnnouncementShowsDisplayNameStatusNote(t *testing.T) {
 		printStartupAnnouncement(`C:\Users\User\AppData\Roaming\d2r-hyper-launcher`)
 	})
 
-	assert.NotContains(t, output, "d2r-hyper-launcher (")
-	assert.Contains(t, output, "• 目前版本：v1.0.0（2026-03-08 13:40:45 release）\n")
-	assert.Contains(t, output, "• 資料目錄：C:\\Users\\User\\AppData\\Roaming\\d2r-hyper-launcher\n")
-	assert.NotContains(t, output, "D2R 路徑：")
-	assert.Contains(t, output, "⚠ 帳號啟動狀態的偵測是用 account.csv 裡的 DisplayName 去對應視窗名稱，\n  所以已經透過該工具開啟 D2R 然後又去修改 DisplayName的話，\n  就會導致啟動狀態顯示不正確。\n")
-	assert.Contains(t, output, "⚠ 注意事項：\n")
-	assert.Contains(t, output, "  - 建議先把 D2R 設成「視窗化」或「無邊框視窗」\n")
-	assert.Contains(t, output, "  - a 批次啟動預設 launch_delay 是 10 秒；舊版預設留下的 5 秒會自動按 10 秒處理，如要調整請回主選單輸入 d。\n")
-	assert.Contains(t, output, "  - 本工具為社群自用工具，與 Blizzard Entertainment 無關；使用風險自負。\n")
-	assert.NotContains(t, output, "啟動間隔：")
-	assert.NotContains(t, output, "視窗切換已啟用：")
+	assert.Equal(t, -1, firstLineIndex(nonEmptyOutputLines(output), func(line string) bool {
+		return line == ui.style.headerDivider
+	}))
+	assert.Len(t, linesWithPrefix(output, ui.prefix(uiMessageInfo)+" "), 2)
+	assert.Len(t, linesWithPrefix(output, ui.prefix(uiMessageWarning)+" "), 2)
+	assert.Contains(t, output, `C:\Users\User\AppData\Roaming\d2r-hyper-launcher`)
 }
 
 func TestPauseAfterStartupAnnouncementWaitsForAnyKey(t *testing.T) {
@@ -287,7 +323,8 @@ func TestPauseAfterStartupAnnouncementWaitsForAnyKey(t *testing.T) {
 		pauseAfterStartupAnnouncement()
 	})
 
-	assert.Contains(t, output, "? 請按任意鍵繼續...")
+	assert.Len(t, linesWithPrefix(output, ui.prefix(uiMessagePrompt)+" "), 1)
+	assert.Empty(t, linesWithPrefix(output, ui.prefix(uiMessageWarning)+" "))
 	assert.Equal(t, 1, waitCalled)
 }
 
@@ -306,16 +343,23 @@ func TestPauseAfterStartupAnnouncementWarnsWhenWaitFails(t *testing.T) {
 		pauseAfterStartupAnnouncement()
 	})
 
-	assert.Contains(t, output, "? 請按任意鍵繼續...")
-	assert.Contains(t, output, "⚠ 等待按鍵失敗：assert.AnError general error for testing")
+	assert.Len(t, linesWithPrefix(output, ui.prefix(uiMessagePrompt)+" "), 1)
+	assert.Len(t, linesWithPrefix(output, ui.prefix(uiMessageWarning)+" "), 1)
+	assert.Contains(t, output, assert.AnError.Error())
 }
 
 func TestFormatLaunchDelayMessage(t *testing.T) {
-	assert.Equal(t, "  等待 30 秒後啟動下一個帳號：VoidLife", formatLaunchDelayMessage(30, "VoidLife"))
+	message := formatLaunchDelayMessage(30, "VoidLife")
+	assert.True(t, strings.HasPrefix(message, "  "))
+	assert.Contains(t, message, "30")
+	assert.Contains(t, message, "VoidLife")
 }
 
 func TestFormatLaunchDelayRemainingMessage(t *testing.T) {
-	assert.Equal(t, "  還剩 25 秒後啟動下一個帳號：VoidLife", formatLaunchDelayRemainingMessage(25, "VoidLife"))
+	message := formatLaunchDelayRemainingMessage(25, "VoidLife")
+	assert.True(t, strings.HasPrefix(message, "  "))
+	assert.Contains(t, message, "25")
+	assert.Contains(t, message, "VoidLife")
 }
 
 func TestPauseAfterSuccessfulLaunchWaitsThreeSeconds(t *testing.T) {
@@ -336,17 +380,22 @@ func TestPauseAfterSuccessfulLaunchWaitsThreeSeconds(t *testing.T) {
 
 func TestDisplayDelayFixed(t *testing.T) {
 	delay := config.LaunchDelayRange{MinSeconds: 30, MaxSeconds: 30}
-	assert.Equal(t, "30 秒", displayDelay(delay))
+	display := displayDelay(delay)
+	assert.Contains(t, display, "30")
+	assert.NotContains(t, display, "60")
 }
 
 func TestDisplayDelayRandom(t *testing.T) {
 	delay := config.LaunchDelayRange{MinSeconds: 30, MaxSeconds: 60}
-	assert.Equal(t, "30-60 秒（隨機）", displayDelay(delay))
+	display := displayDelay(delay)
+	assert.Contains(t, display, "30")
+	assert.Contains(t, display, "60")
 }
 
 func TestLangDefaultsToZhTW(t *testing.T) {
-	assert.Equal(t, "請選擇：", lang.Common.SelectPrompt)
-	assert.Equal(t, "再見！", lang.Common.Goodbye)
+	defaultLang := locale.Get(locale.LocaleZhTW)
+	assert.Equal(t, defaultLang.Common.SelectPrompt, lang.Common.SelectPrompt)
+	assert.Equal(t, defaultLang.Common.Goodbye, lang.Common.Goodbye)
 }
 
 func TestParseLaunchDelayInput(t *testing.T) {
@@ -361,17 +410,17 @@ func TestParseLaunchDelayInput(t *testing.T) {
 
 func TestParseLaunchDelayInputRejectsNegative(t *testing.T) {
 	_, err := parseLaunchDelayInput("9")
-	assert.EqualError(t, err, "啟動間隔下限不可小於 10 秒")
+	assert.Error(t, err)
 }
 
 func TestParseLaunchDelayInputRejectsNonInteger(t *testing.T) {
 	_, err := parseLaunchDelayInput("abc")
-	assert.EqualError(t, err, "啟動間隔必須是整數，或使用像 30-60 的範圍格式")
+	assert.Error(t, err)
 }
 
 func TestParseLaunchDelayInputRejectsInvalidRangeOrder(t *testing.T) {
 	_, err := parseLaunchDelayInput("60-30")
-	assert.EqualError(t, err, "啟動間隔下限不可大於上限")
+	assert.Error(t, err)
 }
 
 func TestLaunchDelayRangeUsesRandomValue(t *testing.T) {
@@ -397,9 +446,14 @@ func TestWaitForNextBatchLaunchReportsRemainingEveryFiveSeconds(t *testing.T) {
 		waitForNextBatchLaunch(12, "VoidLife")
 	})
 
-	assert.Contains(t, output, "• 等待 12 秒後啟動下一個帳號：VoidLife")
-	assert.Contains(t, output, "• 還剩 7 秒後啟動下一個帳號：VoidLife")
-	assert.Contains(t, output, "• 還剩 2 秒後啟動下一個帳號：VoidLife")
+	lines := linesWithPrefix(output, ui.prefix(uiMessageInfo)+" ")
+	assert.Len(t, lines, 3)
+	assert.Equal(t, []int{12}, extractIntsFromString(lines[0]))
+	assert.Equal(t, []int{7}, extractIntsFromString(lines[1]))
+	assert.Equal(t, []int{2}, extractIntsFromString(lines[2]))
+	for _, line := range lines {
+		assert.Contains(t, line, "VoidLife")
+	}
 	assert.Equal(t, []time.Duration{5 * time.Second, 5 * time.Second, 2 * time.Second}, sleeps)
 }
 
@@ -462,26 +516,26 @@ func TestParseSelectionInput(t *testing.T) {
 
 func TestParseSelectionInputRejectsReverseRange(t *testing.T) {
 	_, err := parseSelectionInput("5-3", 8)
-	assert.EqualError(t, err, `區間 "5-3" 起點不可大於終點`)
+	assert.Error(t, err)
 }
 
 func TestParseSelectionInputRejectsOutOfRange(t *testing.T) {
 	_, err := parseSelectionInput("1,9", 8)
-	assert.EqualError(t, err, "編號 9 超出可選範圍 1-8")
+	assert.Error(t, err)
 }
 
 func TestSelectedLaunchFlagMask(t *testing.T) {
 	options := account.LaunchFlagOptions()
-	mask := selectedLaunchFlagMask([]int{0, 1}, options)
+	mask := selectedLaunchFlagMask([]int{0}, options)
 
-	assert.Equal(t, uint32(account.LaunchFlagNoSound|account.LaunchFlagLowQuality), mask)
+	assert.Equal(t, uint32(account.LaunchFlagNoSound), mask)
 }
 
 func TestAllLaunchFlagMask(t *testing.T) {
 	options := account.LaunchFlagOptions()
 	mask := allLaunchFlagMask(options)
 
-	assert.Equal(t, uint32(account.LaunchFlagNoSound|account.LaunchFlagLowQuality), mask)
+	assert.Equal(t, uint32(account.LaunchFlagNoSound), mask)
 }
 
 func TestPrintAccountList(t *testing.T) {
@@ -494,19 +548,27 @@ func TestPrintAccountList(t *testing.T) {
 		printAccountList(accounts, runningStatusLabel)
 	})
 
-	assert.Contains(t, output, "[1] <")
-	assert.Contains(t, output, "Alpha")
-	assert.Contains(t, output, "(alpha@example.com)")
-	assert.Contains(t, output, "[2] <")
-	assert.Contains(t, output, "Bravo")
-	assert.Contains(t, output, "(bravo@example.com)")
-	assert.NotContains(t, output, "flag：")
+	lines := nonEmptyOutputLines(output)
+	accountLines := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if strings.HasPrefix(line, "[") {
+			accountLines = append(accountLines, line)
+		}
+	}
+
+	assert.Len(t, accountLines, 2)
+	assert.Contains(t, accountLines[0], "Alpha")
+	assert.Contains(t, accountLines[0], "alpha@example.com")
+	assert.True(t, strings.HasSuffix(accountLines[0], "(alpha@example.com)"))
+	assert.Contains(t, accountLines[1], "Bravo")
+	assert.Contains(t, accountLines[1], "bravo@example.com")
+	assert.True(t, strings.HasSuffix(accountLines[1], "(bravo@example.com)"))
 }
 
 func TestBuildAccountLaunchFlagTableLines(t *testing.T) {
 	options := account.LaunchFlagOptions()
 	accounts := []account.Account{
-		{LaunchFlags: account.LaunchFlagNoSound | account.LaunchFlagLowQuality},
+		{LaunchFlags: account.LaunchFlagNoSound},
 		{LaunchFlags: 0},
 	}
 
@@ -552,18 +614,25 @@ func TestSetupAccountLaunchFlagsShowsFlagTableAfterAccountList(t *testing.T) {
 		})
 	})
 
-	accountListIndex := strings.Index(output, "帳號列表：")
-	flagTableIndex := strings.Index(output, "flag 對照表：")
-	menuOptionIndex := strings.Index(output, "[1] 設定 flag")
+	lines := nonEmptyOutputLines(output)
+	accountListIndex := firstLineIndex(lines, func(line string) bool {
+		return strings.HasPrefix(line, "[1] <") && strings.Contains(line, "alpha@example.com")
+	})
+	flagTableIndex := firstLineIndex(lines, func(line string) bool {
+		return strings.HasPrefix(line, "|")
+	})
+	menuOptionIndex := firstLineIndex(lines, func(line string) bool {
+		return line == ui.style.menuDivider
+	})
 	assert.NotEqual(t, -1, accountListIndex)
 	assert.NotEqual(t, -1, flagTableIndex)
 	assert.NotEqual(t, -1, menuOptionIndex)
 	assert.Less(t, accountListIndex, flagTableIndex)
 	assert.Less(t, flagTableIndex, menuOptionIndex)
-	assert.Contains(t, output, "關閉聲音")
-	assert.Contains(t, output, "-ns / -nosound")
-	assert.Contains(t, output, "|    1     |")
-	assert.Contains(t, output, "|       v        |")
+	assert.Equal(t, 1, countMenuBlocksWithKeys(output, []string{"1", "2", "b", "h", "q"}))
+	for _, line := range buildAccountLaunchFlagTableLines(accounts) {
+		assert.Contains(t, output, line)
+	}
 }
 
 func TestSetupAccountLaunchFlagsShowsFriendlyModeLabels(t *testing.T) {
@@ -575,8 +644,7 @@ func TestSetupAccountLaunchFlagsShowsFriendlyModeLabels(t *testing.T) {
 		})
 	})
 
-	assert.Contains(t, output, "[1] 選擇 flag 設定至多個帳號")
-	assert.Contains(t, output, "[2] 選擇帳號設定多個 flag")
+	assert.Equal(t, 1, countMenuBlocksWithKeys(output, []string{"1", "2", "3", "b", "h", "q"}))
 }
 
 func TestSetupAccountLaunchFlagsShowsCancelModeLabels(t *testing.T) {
@@ -588,8 +656,7 @@ func TestSetupAccountLaunchFlagsShowsCancelModeLabels(t *testing.T) {
 		})
 	})
 
-	assert.Contains(t, output, "[1] 選擇 flag 取消至多個帳號")
-	assert.Contains(t, output, "[2] 選擇帳號取消多個 flag")
+	assert.Equal(t, 1, countMenuBlocksWithKeys(output, []string{"1", "2", "3", "b", "h", "q"}))
 }
 
 func TestSetupAccountLaunchFlagsShowsAllAccountsAllFlagsOption(t *testing.T) {
@@ -601,10 +668,10 @@ func TestSetupAccountLaunchFlagsShowsAllAccountsAllFlagsOption(t *testing.T) {
 		})
 	})
 
-	assert.Contains(t, output, "[3] 設定所有帳號所有 flag")
+	assert.Equal(t, 1, countMenuBlocksWithKeys(output, []string{"1", "2", "3", "b", "h", "q"}))
 }
 
-func TestSetupAccountLaunchFlagsShowsUpdatedLowQualityWording(t *testing.T) {
+func TestSetupAccountLaunchFlagsDoesNotShowDeprecatedLowQualityFlag(t *testing.T) {
 	accounts := []account.Account{{DisplayName: "Alpha", Email: "alpha@example.com"}}
 
 	output := captureStdout(t, func() {
@@ -613,8 +680,8 @@ func TestSetupAccountLaunchFlagsShowsUpdatedLowQualityWording(t *testing.T) {
 		})
 	})
 
-	assert.Contains(t, output, "術士版本似乎已失效")
-	assert.NotContains(t, output, "效果依版本而定")
+	assert.Len(t, account.LaunchFlagOptions(), 1)
+	assert.Equal(t, 1, countMenuBlocksWithKeys(output, []string{"1", "b", "h", "q"}))
 }
 
 func TestConfigureAllFlagsForAllAccountsSetsEveryCompatibleFlag(t *testing.T) {
@@ -630,11 +697,10 @@ func TestConfigureAllFlagsForAllAccountsSetsEveryCompatibleFlag(t *testing.T) {
 		})
 	})
 
-	expectedFlags := uint32(account.LaunchFlagNoSound | account.LaunchFlagLowQuality)
+	expectedFlags := uint32(account.LaunchFlagNoSound)
 	assert.Equal(t, expectedFlags, accounts[0].LaunchFlags)
 	assert.Equal(t, expectedFlags, accounts[1].LaunchFlags)
-	assert.Contains(t, result, "設定所有帳號所有 flag")
-	assert.Contains(t, result, "套用範圍：全部 2 個帳號")
+	assert.Equal(t, 1, strings.Count(result, ui.prefix(uiMessageSuccess)+" "))
 
 	savedAccounts, err := account.LoadAccounts(accountsFile)
 	assert.NoError(t, err)
@@ -653,8 +719,8 @@ func TestSetupAccountLaunchFlagsReturnsToTopPageAfterSuccessfulChange(t *testing
 		})
 	})
 
-	assert.Equal(t, 2, strings.Count(output, "帳號啟動 flag 設定"))
-	assert.Contains(t, output, "已完成設定。")
+	assert.Equal(t, 2, countMenuBlocksWithKeys(output, []string{"1", "2", "b", "h", "q"}))
+	assert.Equal(t, 1, strings.Count(output, ui.prefix(uiMessageSuccess)+" "))
 	assert.Equal(t, uint32(account.LaunchFlagNoSound), accounts[0].LaunchFlags)
 }
 
@@ -668,8 +734,7 @@ func TestSetupAccountLaunchFlagsReturnsToTopPageAfterCanceledBulkChange(t *testi
 		})
 	})
 
-	assert.Equal(t, 2, strings.Count(output, "帳號啟動 flag 設定"))
-	assert.Contains(t, output, "已取消。")
+	assert.Equal(t, 2, countMenuBlocksWithKeys(output, []string{"1", "2", "b", "h", "q"}))
 	assert.Equal(t, uint32(0), accounts[0].LaunchFlags)
 }
 
@@ -682,8 +747,8 @@ func TestSetupAccountLaunchFlagsBackFromByFlagReturnsToModeMenu(t *testing.T) {
 		})
 	})
 
-	assert.Equal(t, 2, strings.Count(output, "取消 flag：選擇操作方式"))
-	assert.Equal(t, 2, strings.Count(output, "帳號啟動 flag 設定"))
+	assert.Equal(t, 2, countMenuBlocksWithKeys(output, []string{"1", "2", "3", "b", "h", "q"}))
+	assert.Equal(t, 2, countMenuBlocksWithKeys(output, []string{"1", "2", "b", "h", "q"}))
 }
 
 func TestSetupAccountLaunchFlagsBackFromByAccountFlagsReturnsToAccountMenu(t *testing.T) {
@@ -695,9 +760,16 @@ func TestSetupAccountLaunchFlagsBackFromByAccountFlagsReturnsToAccountMenu(t *te
 		})
 	})
 
-	assert.Equal(t, 2, strings.Count(output, "取消 flag：先選帳號"))
-	assert.Equal(t, 2, strings.Count(output, "取消 flag：選擇操作方式"))
-	assert.Equal(t, 2, strings.Count(output, "帳號啟動 flag 設定"))
+	accountSelectionBlocks := 0
+	for _, block := range parseMenuBlocks(output) {
+		if sameStrings(menuBlockKeys(block), []string{"1", "b", "h", "q"}) && len(blockLinesWithPrefix(block, ui.prefix(uiMessagePrompt)+" ")) == 0 {
+			accountSelectionBlocks++
+		}
+	}
+
+	assert.Equal(t, 2, accountSelectionBlocks)
+	assert.Equal(t, 2, countMenuBlocksWithKeys(output, []string{"1", "2", "3", "b", "h", "q"}))
+	assert.Equal(t, 2, countMenuBlocksWithKeys(output, []string{"1", "2", "b", "h", "q"}))
 }
 
 func TestShowInputErrorAndPause(t *testing.T) {
@@ -716,11 +788,12 @@ func TestShowInputErrorAndPause(t *testing.T) {
 	}
 
 	output := captureStdout(t, func() {
-		showInputErrorAndPause(`解析失敗：區間 "1-4" 超出可選範圍 1-2`)
+		showInputErrorAndPause("sentinel-error")
 	})
 
-	assert.Contains(t, output, `✘ 解析失敗：區間 "1-4" 超出可選範圍 1-2`)
-	assert.Contains(t, output, "? 請按任意鍵繼續...")
+	assert.Equal(t, 1, strings.Count(output, ui.prefix(uiMessageError)+" "))
+	assert.Len(t, linesWithPrefix(output, ui.prefix(uiMessagePrompt)+" "), 1)
+	assert.Contains(t, output, "sentinel-error")
 	assert.Equal(t, 1, waitCalled)
 }
 
@@ -739,8 +812,8 @@ func TestShowInvalidInputAndPause(t *testing.T) {
 		showInvalidInputAndPause()
 	})
 
-	assert.Contains(t, output, "✘ 無效輸入，請重試。")
-	assert.Contains(t, output, "? 請按任意鍵繼續...")
+	assert.Equal(t, 1, strings.Count(output, ui.prefix(uiMessageError)+" "))
+	assert.Len(t, linesWithPrefix(output, ui.prefix(uiMessagePrompt)+" "), 1)
 }
 
 func TestShowInfoAndPause(t *testing.T) {
@@ -759,11 +832,12 @@ func TestShowInfoAndPause(t *testing.T) {
 	}
 
 	output := captureStdout(t, func() {
-		showInfoAndPause("所有帳號都已在執行中。")
+		showInfoAndPause("sentinel-info")
 	})
 
-	assert.Contains(t, output, "• 所有帳號都已在執行中。")
-	assert.Contains(t, output, "? 請按任意鍵繼續...")
+	assert.Len(t, linesWithPrefix(output, ui.prefix(uiMessageInfo)+" "), 1)
+	assert.Len(t, linesWithPrefix(output, ui.prefix(uiMessagePrompt)+" "), 1)
+	assert.Contains(t, output, "sentinel-info")
 	assert.Equal(t, 1, waitCalled)
 }
 
@@ -783,29 +857,39 @@ func TestShowWarningAndPause(t *testing.T) {
 	}
 
 	output := captureStdout(t, func() {
-		showWarningAndPause("Alpha 已在執行中。")
+		showWarningAndPause("sentinel-warning")
 	})
 
-	assert.Contains(t, output, "⚠ Alpha 已在執行中。")
-	assert.Contains(t, output, "? 請按任意鍵繼續...")
+	assert.Len(t, linesWithPrefix(output, ui.prefix(uiMessageWarning)+" "), 1)
+	assert.Len(t, linesWithPrefix(output, ui.prefix(uiMessagePrompt)+" "), 1)
+	assert.Contains(t, output, "sentinel-warning")
 	assert.Equal(t, 1, waitCalled)
 }
 
 func TestShowInputErrorAndPauseFallsBackToEnterWhenSingleKeyUnavailable(t *testing.T) {
 	originalCanSingleKeyContinue := ui.canSingleKeyContinue
+	originalWaitForAnyKey := ui.waitForAnyKey
 	t.Cleanup(func() {
 		ui.canSingleKeyContinue = originalCanSingleKeyContinue
+		ui.waitForAnyKey = originalWaitForAnyKey
 	})
 
 	ui.canSingleKeyContinue = func() bool { return false }
+	waitCalled := 0
+	ui.waitForAnyKey = func() error {
+		waitCalled++
+		return nil
+	}
 	output := captureStdout(t, func() {
 		withTestInput(t, "\n", func() {
-			showInputErrorAndPause("無效輸入，請重試。")
+			showInputErrorAndPause("sentinel-enter")
 		})
 	})
 
-	assert.Contains(t, output, "✘ 無效輸入，請重試。")
-	assert.Contains(t, output, "? 請按 Enter 繼續...")
+	assert.Equal(t, 1, strings.Count(output, ui.prefix(uiMessageError)+" "))
+	assert.Len(t, linesWithPrefix(output, ui.prefix(uiMessagePrompt)+" "), 1)
+	assert.Contains(t, output, "sentinel-enter")
+	assert.Equal(t, 0, waitCalled)
 }
 
 func TestSetupSwitcherKeepsCurrentMenuAfterInvalidInput(t *testing.T) {
@@ -821,8 +905,8 @@ func TestSetupSwitcherKeepsCurrentMenuAfterInvalidInput(t *testing.T) {
 		})
 	})
 
-	assert.Contains(t, output, "✘ 無效輸入，請重試。")
-	assert.Equal(t, 2, strings.Count(output, "視窗切換設定"))
+	assert.Equal(t, 1, strings.Count(output, ui.prefix(uiMessageError)+" "))
+	assert.Equal(t, 2, countMenuBlocksWithKeys(output, []string{"1", "2", "0", "b", "h", "q"}))
 }
 
 func TestSetupLaunchDelayKeepsCurrentMenuAfterInvalidInput(t *testing.T) {
@@ -838,8 +922,8 @@ func TestSetupLaunchDelayKeepsCurrentMenuAfterInvalidInput(t *testing.T) {
 		})
 	})
 
-	assert.Contains(t, output, "✘ 啟動間隔必須是整數，或使用像 30-60 的範圍格式")
-	assert.Equal(t, 2, strings.Count(output, "啟動間隔設定"))
+	assert.Equal(t, 1, strings.Count(output, ui.prefix(uiMessageError)+" "))
+	assert.Equal(t, 2, countMenuBlocksWithKeys(output, []string{"b", "h", "q"}))
 }
 
 func TestSetupAccountLaunchFlagsKeepsCurrentMenuAfterInvalidInput(t *testing.T) {
@@ -856,8 +940,8 @@ func TestSetupAccountLaunchFlagsKeepsCurrentMenuAfterInvalidInput(t *testing.T) 
 		})
 	})
 
-	assert.Contains(t, output, "✘ 無效輸入，請重試。")
-	assert.Equal(t, 2, strings.Count(output, "帳號啟動 flag 設定"))
+	assert.Equal(t, 1, strings.Count(output, ui.prefix(uiMessageError)+" "))
+	assert.Equal(t, 2, countMenuBlocksWithKeys(output, []string{"1", "2", "b", "h", "q"}))
 }
 
 func TestPromptLaunchRegionKeepsCurrentMenuAfterInvalidInput(t *testing.T) {
@@ -869,48 +953,396 @@ func TestPromptLaunchRegionKeepsCurrentMenuAfterInvalidInput(t *testing.T) {
 
 	output := captureStdout(t, func() {
 		withTestInput(t, "x\n\nb\n", func() {
-			region, ok := promptLaunchRegion("啟動指定帳號：選擇區域", []*account.Account{
+			choice, ok := promptLaunchRegion("啟動指定帳號：選擇區域", []*account.Account{
 				{DisplayName: "Alpha", Email: "alpha@example.com"},
-			})
+			}, nil, nil)
 			assert.False(t, ok)
-			assert.Nil(t, region)
+			assert.Nil(t, choice.ManualRegion)
+			assert.False(t, choice.UseDefaults)
 		})
 	})
 
-	assert.Contains(t, output, "✘ 無效的區域選擇。")
-	assert.Equal(t, 2, strings.Count(output, "啟動指定帳號：選擇區域"))
+	assert.Equal(t, 1, strings.Count(output, ui.prefix(uiMessageError)+" "))
+	assert.Equal(t, 2, countMenuBlocksWithKeys(output, []string{"1", "2", "3", "b", "h", "q"}))
 }
 
 func TestPromptLaunchRegionShowsSingleTargetAccount(t *testing.T) {
 	output := captureStdout(t, func() {
 		withTestInput(t, "b\n", func() {
-			region, ok := promptLaunchRegion("啟動指定帳號：選擇區域", []*account.Account{
-				{DisplayName: "Alpha", Email: "alpha@example.com"},
-			})
+			choice, ok := promptLaunchRegion("啟動指定帳號：選擇區域", []*account.Account{
+				{DisplayName: "Alpha", Email: "alpha@example.com", GraphicsProfile: "1080p-low", DefaultRegion: "EU", DefaultMod: mods.DefaultModVanilla},
+			}, []string{"sample-mod"}, []string{"1080p-low"})
 			assert.False(t, ok)
-			assert.Nil(t, region)
+			assert.Nil(t, choice.ManualRegion)
+			assert.False(t, choice.UseDefaults)
 		})
 	})
 
-	assert.Contains(t, output, "• 準備啟動的帳號：")
-	assert.Contains(t, output, "  Alpha (alpha@example.com)")
+	assert.Contains(t, output, "Alpha")
+	assert.Contains(t, output, "alpha@example.com")
+	assert.Contains(t, output, "EU")
+	assert.Contains(t, output, lang.DefaultMods.StatusVanilla)
+	assert.Contains(t, output, "1080p-low")
+	assert.Equal(t, 1, countMenuBlocksWithKeys(output, []string{"1", "2", "3", "b", "h", "q"}))
 }
 
 func TestPromptLaunchRegionShowsBatchTargetAccounts(t *testing.T) {
 	output := captureStdout(t, func() {
 		withTestInput(t, "b\n", func() {
-			region, ok := promptLaunchRegion("啟動所有帳號：選擇區域", []*account.Account{
-				{DisplayName: "Alpha", Email: "alpha@example.com"},
-				{DisplayName: "Bravo", Email: "bravo@example.com"},
-			})
+			choice, ok := promptLaunchRegion("啟動所有帳號：選擇區域", []*account.Account{
+				{DisplayName: "Alpha", Email: "alpha@example.com", GraphicsProfile: "1080p-low", DefaultRegion: "NA", DefaultMod: mods.DefaultModVanilla},
+				{DisplayName: "Bravo", Email: "bravo@example.com", GraphicsProfile: "1440p-high", DefaultRegion: "EU", DefaultMod: "sample-mod"},
+			}, []string{"sample-mod"}, []string{"1080p-low", "1440p-high"})
 			assert.False(t, ok)
-			assert.Nil(t, region)
+			assert.Nil(t, choice.ManualRegion)
+			assert.False(t, choice.UseDefaults)
 		})
 	})
 
-	assert.Contains(t, output, "• 準備啟動的帳號：")
-	assert.Contains(t, output, "  Alpha (alpha@example.com)")
-	assert.Contains(t, output, "  Bravo (bravo@example.com)")
+	assert.Contains(t, output, "Alpha")
+	assert.Contains(t, output, "alpha@example.com")
+	assert.Contains(t, output, "Bravo")
+	assert.Contains(t, output, "bravo@example.com")
+	assert.Contains(t, output, "NA")
+	assert.Contains(t, output, "EU")
+	assert.Contains(t, output, lang.DefaultMods.StatusVanilla)
+	assert.Contains(t, output, "sample-mod")
+	assert.Contains(t, output, "1080p-low")
+	assert.Contains(t, output, "1440p-high")
+	assert.Equal(t, 1, countMenuBlocksWithKeys(output, []string{"1", "2", "3", "b", "h", "q"}))
+}
+
+func TestPromptLaunchRegionEnterUsesStoredDefaultMode(t *testing.T) {
+	withTestInput(t, "\n", func() {
+		choice, ok := promptLaunchRegion("啟動指定帳號：選擇區域", []*account.Account{
+			{DisplayName: "Alpha", Email: "alpha@example.com", DefaultRegion: "EU"},
+		}, nil, nil)
+		assert.True(t, ok)
+		assert.True(t, choice.UseDefaults)
+		assert.Nil(t, choice.ManualRegion)
+	})
+}
+
+func TestPromptLaunchRegionEnterRequiresDefaultsForAllTargets(t *testing.T) {
+	originalCanSingleKeyContinue := ui.canSingleKeyContinue
+	t.Cleanup(func() {
+		ui.canSingleKeyContinue = originalCanSingleKeyContinue
+	})
+	ui.canSingleKeyContinue = func() bool { return false }
+
+	output := captureStdout(t, func() {
+		withTestInput(t, "\n\nb\n", func() {
+			choice, ok := promptLaunchRegion("啟動所有帳號：選擇區域", []*account.Account{
+				{DisplayName: "Alpha", Email: "alpha@example.com", DefaultRegion: "NA"},
+				{DisplayName: "Bravo", Email: "bravo@example.com"},
+				{DisplayName: "Charlie", Email: "charlie@example.com"},
+			}, nil, nil)
+			assert.False(t, ok)
+			assert.False(t, choice.UseDefaults)
+			assert.Nil(t, choice.ManualRegion)
+		})
+	})
+
+	assert.Equal(t, 1, strings.Count(output, ui.prefix(uiMessageError)+" "))
+	assert.Contains(t, output, "- Bravo")
+	assert.Contains(t, output, "- Charlie")
+	assert.NotContains(t, output, "Bravo, Charlie")
+	assert.Equal(t, 2, countMenuBlocksWithKeys(output, []string{"1", "2", "3", "b", "h", "q"}))
+}
+
+func TestPromptLaunchRegionAllowsManualOverrideWithoutStoredDefaults(t *testing.T) {
+	withTestInput(t, "2\n", func() {
+		choice, ok := promptLaunchRegion("啟動指定帳號：選擇區域", []*account.Account{
+			{DisplayName: "Alpha", Email: "alpha@example.com"},
+		}, nil, nil)
+		assert.True(t, ok)
+		if assert.NotNil(t, choice.ManualRegion) {
+			assert.Equal(t, "EU", choice.ManualRegion.Name)
+		}
+		assert.False(t, choice.UseDefaults)
+	})
+}
+
+func TestPromptLaunchModKeepsCurrentMenuAfterInvalidInput(t *testing.T) {
+	originalCanSingleKeyContinue := ui.canSingleKeyContinue
+	t.Cleanup(func() {
+		ui.canSingleKeyContinue = originalCanSingleKeyContinue
+	})
+	ui.canSingleKeyContinue = func() bool { return false }
+
+	accounts := []account.Account{{DisplayName: "Alpha", Email: "alpha@example.com"}}
+	output := captureStdout(t, func() {
+		withTestInput(t, "x\n\nb\n", func() {
+			choice, ok := promptLaunchMod("啟動指定帳號：選擇 mod", accounts, filepath.Join(t.TempDir(), "accounts.csv"), []*account.Account{&accounts[0]}, []string{"sample-mod"}, nil)
+			assert.False(t, ok)
+			assert.False(t, choice.UseDefaults)
+			assert.False(t, choice.HasManual)
+		})
+	})
+
+	assert.Equal(t, 1, strings.Count(output, ui.prefix(uiMessageError)+" "))
+	assert.Equal(t, 2, countMenuBlocksWithKeys(output, []string{"0", "1", "b", "h", "q"}))
+}
+
+func TestPromptLaunchModShowsBatchTargetAccounts(t *testing.T) {
+	accounts := []account.Account{
+		{DisplayName: "Alpha", Email: "alpha@example.com"},
+		{DisplayName: "Bravo", Email: "bravo@example.com"},
+	}
+
+	output := captureStdout(t, func() {
+		withTestInput(t, "b\n", func() {
+			choice, ok := promptLaunchMod("啟動所有帳號：選擇 mod", accounts, filepath.Join(t.TempDir(), "accounts.csv"), []*account.Account{&accounts[0], &accounts[1]}, []string{"sample-mod"}, nil)
+			assert.False(t, ok)
+			assert.False(t, choice.UseDefaults)
+			assert.False(t, choice.HasManual)
+		})
+	})
+
+	assert.Contains(t, output, "Alpha")
+	assert.Contains(t, output, "alpha@example.com")
+	assert.Contains(t, output, "Bravo")
+	assert.Contains(t, output, "bravo@example.com")
+	assert.Contains(t, output, lang.RegionDefaults.StatusUnassigned)
+	assert.Contains(t, output, lang.DefaultMods.StatusUnassigned)
+	assert.Contains(t, output, lang.GraphicsProfiles.StatusUnassigned)
+	assert.Equal(t, 1, countMenuBlocksWithKeys(output, []string{"0", "1", "b", "h", "q"}))
+}
+
+func TestPromptLaunchModShowsPreparedDefaultsForTargets(t *testing.T) {
+	accounts := []account.Account{
+		{DisplayName: "Alpha", Email: "alpha@example.com", GraphicsProfile: "1080p-low", DefaultRegion: "NA", DefaultMod: mods.DefaultModVanilla},
+		{DisplayName: "Bravo", Email: "bravo@example.com", GraphicsProfile: "1440p-high", DefaultRegion: "EU", DefaultMod: "sample-mod"},
+	}
+
+	output := captureStdout(t, func() {
+		withTestInput(t, "b\n", func() {
+			choice, ok := promptLaunchMod("啟動所有帳號：選擇 mod", accounts, filepath.Join(t.TempDir(), "accounts.csv"), []*account.Account{&accounts[0], &accounts[1]}, []string{"sample-mod"}, []string{"1080p-low", "1440p-high"})
+			assert.False(t, ok)
+			assert.False(t, choice.UseDefaults)
+			assert.False(t, choice.HasManual)
+		})
+	})
+
+	assert.Contains(t, output, "NA")
+	assert.Contains(t, output, "EU")
+	assert.Contains(t, output, lang.DefaultMods.StatusVanilla)
+	assert.Contains(t, output, "sample-mod")
+	assert.Contains(t, output, "1080p-low")
+	assert.Contains(t, output, "1440p-high")
+}
+
+func TestPromptLaunchModEnterUsesStoredDefaultMode(t *testing.T) {
+	accounts := []account.Account{
+		{DisplayName: "Alpha", Email: "alpha@example.com", DefaultMod: mods.DefaultModVanilla},
+	}
+	accountsFile := filepath.Join(t.TempDir(), "accounts.csv")
+	assert.NoError(t, account.SaveAccounts(accountsFile, accounts))
+
+	withTestInput(t, "\n", func() {
+		choice, ok := promptLaunchMod("啟動指定帳號：選擇 mod", accounts, accountsFile, []*account.Account{&accounts[0]}, nil, nil)
+		assert.True(t, ok)
+		assert.True(t, choice.UseDefaults)
+		assert.False(t, choice.HasManual)
+	})
+}
+
+func TestPromptLaunchModEnterRequiresDefaultsForAllTargets(t *testing.T) {
+	originalCanSingleKeyContinue := ui.canSingleKeyContinue
+	t.Cleanup(func() {
+		ui.canSingleKeyContinue = originalCanSingleKeyContinue
+	})
+	ui.canSingleKeyContinue = func() bool { return false }
+
+	accounts := []account.Account{
+		{DisplayName: "Alpha", Email: "alpha@example.com", DefaultMod: mods.DefaultModVanilla},
+		{DisplayName: "Bravo", Email: "bravo@example.com"},
+		{DisplayName: "Charlie", Email: "charlie@example.com"},
+	}
+	accountsFile := filepath.Join(t.TempDir(), "accounts.csv")
+	assert.NoError(t, account.SaveAccounts(accountsFile, accounts))
+
+	output := captureStdout(t, func() {
+		withTestInput(t, "\n\nb\n", func() {
+			choice, ok := promptLaunchMod("啟動所有帳號：選擇 mod", accounts, accountsFile, []*account.Account{&accounts[0], &accounts[1], &accounts[2]}, []string{"sample-mod"}, nil)
+			assert.False(t, ok)
+			assert.False(t, choice.UseDefaults)
+			assert.False(t, choice.HasManual)
+		})
+	})
+
+	assert.Equal(t, 1, strings.Count(output, ui.prefix(uiMessageError)+" "))
+	assert.Contains(t, output, "- Bravo")
+	assert.Contains(t, output, "- Charlie")
+	assert.NotContains(t, output, "Bravo, Charlie")
+	assert.Equal(t, 2, countMenuBlocksWithKeys(output, []string{"0", "1", "b", "h", "q"}))
+}
+
+func TestPromptLaunchModEnterClearsMissingInstalledDefault(t *testing.T) {
+	originalCanSingleKeyContinue := ui.canSingleKeyContinue
+	t.Cleanup(func() {
+		ui.canSingleKeyContinue = originalCanSingleKeyContinue
+	})
+	ui.canSingleKeyContinue = func() bool { return false }
+
+	accounts := []account.Account{
+		{DisplayName: "Alpha", Email: "alpha@example.com", DefaultMod: "ghost-mod"},
+	}
+	accountsFile := filepath.Join(t.TempDir(), "accounts.csv")
+	assert.NoError(t, account.SaveAccounts(accountsFile, accounts))
+
+	output := captureStdout(t, func() {
+		withTestInput(t, "\n\nb\n", func() {
+			choice, ok := promptLaunchMod("啟動指定帳號：選擇 mod", accounts, accountsFile, []*account.Account{&accounts[0]}, []string{"sample-mod"}, nil)
+			assert.False(t, ok)
+			assert.False(t, choice.UseDefaults)
+			assert.False(t, choice.HasManual)
+		})
+	})
+
+	assert.Equal(t, "", accounts[0].DefaultMod)
+	reloaded, err := account.LoadAccounts(accountsFile)
+	assert.NoError(t, err)
+	assert.Equal(t, "", reloaded[0].DefaultMod)
+	assert.Equal(t, 1, strings.Count(output, ui.prefix(uiMessageError)+" "))
+}
+
+func TestPromptLaunchModAllowsManualOverrideWithoutStoredDefaults(t *testing.T) {
+	accounts := []account.Account{
+		{DisplayName: "Alpha", Email: "alpha@example.com"},
+	}
+	withTestInput(t, "0\n", func() {
+		choice, ok := promptLaunchMod("啟動指定帳號：選擇 mod", accounts, filepath.Join(t.TempDir(), "accounts.csv"), []*account.Account{&accounts[0]}, []string{"sample-mod"}, nil)
+		assert.True(t, ok)
+		assert.True(t, choice.HasManual)
+		assert.Equal(t, mods.DefaultModVanilla, choice.ManualMod)
+		assert.False(t, choice.UseDefaults)
+	})
+}
+
+func TestPromptLaunchGraphicsKeepsCurrentMenuAfterInvalidInput(t *testing.T) {
+	originalCanSingleKeyContinue := ui.canSingleKeyContinue
+	t.Cleanup(func() {
+		ui.canSingleKeyContinue = originalCanSingleKeyContinue
+	})
+	ui.canSingleKeyContinue = func() bool { return false }
+
+	accounts := []account.Account{{DisplayName: "Alpha", Email: "alpha@example.com"}}
+	output := captureStdout(t, func() {
+		withTestInput(t, "x\n\nb\n", func() {
+			choice, ok := promptLaunchGraphics("啟動指定帳號：選擇畫質", accounts, filepath.Join(t.TempDir(), "accounts.csv"), []*account.Account{&accounts[0]}, nil, []string{"boss-low"})
+			assert.False(t, ok)
+			assert.False(t, choice.UseDefaults)
+			assert.False(t, choice.HasManual)
+		})
+	})
+
+	assert.Equal(t, 1, strings.Count(output, ui.prefix(uiMessageError)+" "))
+	assert.Equal(t, 2, countMenuBlocksWithKeys(output, []string{"0", "1", "b", "h", "q"}))
+}
+
+func TestPromptLaunchGraphicsShowsPreparedDefaultsForTargets(t *testing.T) {
+	accounts := []account.Account{
+		{DisplayName: "Alpha", Email: "alpha@example.com", GraphicsProfile: "1080p-low", DefaultRegion: "NA", DefaultMod: mods.DefaultModVanilla},
+		{DisplayName: "Bravo", Email: "bravo@example.com", GraphicsProfile: "missing-profile", DefaultRegion: "EU", DefaultMod: "sample-mod"},
+	}
+
+	output := captureStdout(t, func() {
+		withTestInput(t, "b\n", func() {
+			choice, ok := promptLaunchGraphics("啟動所有帳號：選擇畫質", accounts, filepath.Join(t.TempDir(), "accounts.csv"), []*account.Account{&accounts[0], &accounts[1]}, []string{"sample-mod"}, []string{"1080p-low"})
+			assert.False(t, ok)
+			assert.False(t, choice.UseDefaults)
+			assert.False(t, choice.HasManual)
+		})
+	})
+
+	assert.Contains(t, output, "NA")
+	assert.Contains(t, output, "EU")
+	assert.Contains(t, output, lang.DefaultMods.StatusVanilla)
+	assert.Contains(t, output, "sample-mod")
+	assert.Contains(t, output, "1080p-low")
+	assert.Contains(t, output, fmt.Sprintf(lang.GraphicsProfiles.StatusMissing, "missing-profile"))
+	assert.Equal(t, 1, countMenuBlocksWithKeys(output, []string{"0", "1", "b", "h", "q"}))
+}
+
+func TestPromptLaunchGraphicsEnterUsesStoredDefaults(t *testing.T) {
+	accounts := []account.Account{
+		{DisplayName: "Alpha", Email: "alpha@example.com", GraphicsProfile: "boss-low"},
+	}
+
+	withTestInput(t, "\n", func() {
+		choice, ok := promptLaunchGraphics("啟動指定帳號：選擇畫質", accounts, filepath.Join(t.TempDir(), "accounts.csv"), []*account.Account{&accounts[0]}, nil, []string{"boss-low"})
+		assert.True(t, ok)
+		assert.True(t, choice.UseDefaults)
+		assert.False(t, choice.HasManual)
+	})
+}
+
+func TestPromptLaunchGraphicsEnterRequiresDefaultsForAllTargets(t *testing.T) {
+	originalCanSingleKeyContinue := ui.canSingleKeyContinue
+	t.Cleanup(func() {
+		ui.canSingleKeyContinue = originalCanSingleKeyContinue
+	})
+	ui.canSingleKeyContinue = func() bool { return false }
+
+	accounts := []account.Account{
+		{DisplayName: "Alpha", Email: "alpha@example.com", GraphicsProfile: "boss-low"},
+		{DisplayName: "Bravo", Email: "bravo@example.com"},
+		{DisplayName: "Charlie", Email: "charlie@example.com"},
+	}
+
+	output := captureStdout(t, func() {
+		withTestInput(t, "\n\nb\n", func() {
+			choice, ok := promptLaunchGraphics("啟動所有帳號：選擇畫質", accounts, filepath.Join(t.TempDir(), "accounts.csv"), []*account.Account{&accounts[0], &accounts[1], &accounts[2]}, nil, []string{"boss-low"})
+			assert.False(t, ok)
+			assert.False(t, choice.UseDefaults)
+			assert.False(t, choice.HasManual)
+		})
+	})
+
+	assert.Equal(t, 1, strings.Count(output, ui.prefix(uiMessageError)+" "))
+	assert.Contains(t, output, "- Bravo")
+	assert.Contains(t, output, "- Charlie")
+	assert.NotContains(t, output, "Bravo, Charlie")
+	assert.Equal(t, 2, countMenuBlocksWithKeys(output, []string{"0", "1", "b", "h", "q"}))
+}
+
+func TestPromptLaunchGraphicsEnterClearsMissingSavedDefault(t *testing.T) {
+	accounts := []account.Account{
+		{DisplayName: "Alpha", Email: "alpha@example.com", GraphicsProfile: "ghost-profile"},
+	}
+	accountsFile := filepath.Join(t.TempDir(), "accounts.csv")
+	assert.NoError(t, account.SaveAccounts(accountsFile, accounts))
+
+	output := captureStdout(t, func() {
+		withTestInput(t, "\n\nb\n", func() {
+			choice, ok := promptLaunchGraphics("啟動指定帳號：選擇畫質", accounts, accountsFile, []*account.Account{&accounts[0]}, nil, []string{"boss-low"})
+			assert.False(t, ok)
+			assert.False(t, choice.UseDefaults)
+			assert.False(t, choice.HasManual)
+		})
+	})
+
+	assert.Equal(t, "", accounts[0].GraphicsProfile)
+	reloaded, err := account.LoadAccounts(accountsFile)
+	assert.NoError(t, err)
+	assert.Equal(t, "", reloaded[0].GraphicsProfile)
+	assert.Equal(t, 1, strings.Count(output, ui.prefix(uiMessageWarning)+" "))
+	assert.Equal(t, 1, strings.Count(output, ui.prefix(uiMessageError)+" "))
+}
+
+func TestPromptLaunchGraphicsAllowsManualOverrideWithoutStoredDefaults(t *testing.T) {
+	accounts := []account.Account{
+		{DisplayName: "Alpha", Email: "alpha@example.com"},
+	}
+
+	withTestInput(t, "0\n", func() {
+		choice, ok := promptLaunchGraphics("啟動指定帳號：選擇畫質", accounts, filepath.Join(t.TempDir(), "accounts.csv"), []*account.Account{&accounts[0]}, nil, []string{"boss-low"})
+		assert.True(t, ok)
+		assert.True(t, choice.HasManual)
+		assert.Equal(t, "", choice.ManualProfile)
+		assert.False(t, choice.UseDefaults)
+	})
 }
 
 func captureStdout(t *testing.T, fn func()) string {

@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"d2rhl/internal/common/d2r"
+	"d2rhl/internal/multiboxing/mods"
 )
 
 var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
@@ -17,11 +20,14 @@ const encryptedPrefix = "ENC:"
 
 // Account represents a Battle.net account for D2R.
 type Account struct {
-	Email       string
-	Password    string // 加密後以 "ENC:" 前綴標記
-	DisplayName string
-	LaunchFlags uint32 // D2R 啟動參數 bitmask
-	ToolFlags   uint32 // 工具內部設定 bitmask
+	Email           string
+	Password        string // 加密後以 "ENC:" 前綴標記
+	DisplayName     string
+	LaunchFlags     uint32 // D2R 啟動參數 bitmask
+	ToolFlags       uint32 // 工具內部設定 bitmask
+	GraphicsProfile string // 玩家指定的畫質設定檔名稱；空字串表示未指派
+	DefaultRegion   string // 玩家指定的預設登入區域；空字串表示未指派
+	DefaultMod      string // 玩家指定的預設 mod；空字串表示未指派，<vanilla> 表示預設原版
 }
 
 // IsPasswordEncrypted checks if the password is already encrypted.
@@ -30,7 +36,7 @@ func IsPasswordEncrypted(password string) bool {
 }
 
 // LoadAccounts reads accounts from a CSV file.
-// CSV format: Email,Password,DisplayName[,LaunchFlags[,ToolFlags]] (first row is header).
+// CSV format: Email,Password,DisplayName[,LaunchFlags[,ToolFlags[,GraphicsProfile[,DefaultRegion[,DefaultMod]]]]] (first row is header).
 func LoadAccounts(path string) ([]Account, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -93,18 +99,46 @@ func LoadAccounts(path string) ([]Account, error) {
 			}
 		}
 
+		var graphicsProfile string
+		if len(record) >= 6 {
+			graphicsProfile = strings.TrimSpace(record[5])
+		}
+
+		var defaultRegion string
+		if len(record) >= 7 {
+			rawDefaultRegion := strings.TrimSpace(record[6])
+			if rawDefaultRegion != "" {
+				defaultRegion = d2r.NormalizeRegionName(rawDefaultRegion)
+				if defaultRegion == "" || defaultRegion != rawDefaultRegion {
+					sanitizedInvalid = true
+				}
+			}
+		}
+
+		var defaultMod string
+		if len(record) >= 8 {
+			rawDefaultMod := strings.TrimSpace(record[7])
+			defaultMod = mods.NormalizeSavedDefaultMod(rawDefaultMod)
+			if defaultMod != rawDefaultMod {
+				sanitizedInvalid = true
+			}
+		}
+
 		accounts = append(accounts, Account{
-			Email:       strings.TrimSpace(record[0]),
-			Password:    strings.TrimSpace(record[1]),
-			DisplayName: strings.TrimSpace(record[2]),
-			LaunchFlags: launchFlags,
-			ToolFlags:   toolFlags,
+			Email:           strings.TrimSpace(record[0]),
+			Password:        strings.TrimSpace(record[1]),
+			DisplayName:     strings.TrimSpace(record[2]),
+			LaunchFlags:     launchFlags,
+			ToolFlags:       toolFlags,
+			GraphicsProfile: graphicsProfile,
+			DefaultRegion:   defaultRegion,
+			DefaultMod:      defaultMod,
 		})
 	}
 
 	if sanitizedInvalid {
 		if err := SaveAccounts(path, accounts); err != nil {
-			return nil, fmt.Errorf("failed to sanitize LaunchFlags: %w", err)
+			return nil, fmt.Errorf("failed to sanitize account data: %w", err)
 		}
 	}
 
@@ -131,7 +165,7 @@ func SaveAccounts(path string, accounts []Account) error {
 	defer writer.Flush()
 
 	// header
-	if err := writer.Write([]string{"Email", "Password", "DisplayName", "LaunchFlags", "ToolFlags"}); err != nil {
+	if err := writer.Write([]string{"Email", "Password", "DisplayName", "LaunchFlags", "ToolFlags", "GraphicsProfile", "DefaultRegion", "DefaultMod"}); err != nil {
 		return fmt.Errorf("failed to write header: %w", err)
 	}
 
@@ -142,6 +176,9 @@ func SaveAccounts(path string, accounts []Account) error {
 			acc.DisplayName,
 			strconv.FormatUint(uint64(acc.LaunchFlags), 10),
 			strconv.FormatUint(uint64(acc.ToolFlags), 10),
+			strings.TrimSpace(acc.GraphicsProfile),
+			strings.TrimSpace(acc.DefaultRegion),
+			mods.NormalizeSavedDefaultMod(acc.DefaultMod),
 		}
 		if err := writer.Write(record); err != nil {
 			return fmt.Errorf("failed to write account #%d: %w", i+1, err)

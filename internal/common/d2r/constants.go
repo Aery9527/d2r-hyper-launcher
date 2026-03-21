@@ -1,6 +1,8 @@
 // Package d2r provides constants and definitions specific to Diablo II: Resurrected.
 package d2r
 
+import "strings"
+
 const (
 	// ProcessName is the D2R executable name.
 	ProcessName = "D2R.exe"
@@ -48,6 +50,16 @@ func FindRegion(name string) *Region {
 		}
 	}
 	return nil
+}
+
+// NormalizeRegionName returns the canonical region name for a known region input.
+// It returns an empty string when the input does not match any known region.
+func NormalizeRegionName(name string) string {
+	region := FindRegion(strings.TrimSpace(name))
+	if region == nil {
+		return ""
+	}
+	return region.Name
 }
 
 func equalsIgnoreCase(a, b string) bool {

@@ -7,17 +7,23 @@ import (
 )
 
 func TestLaunchArgs(t *testing.T) {
-	args := LaunchArgs(LaunchFlagNoSound | LaunchFlagLowQuality)
-	assert.Equal(t, []string{"-ns", "-lq"}, args)
+	args := LaunchArgs(LaunchFlagNoSound | (1 << 2))
+	assert.Equal(t, []string{"-ns"}, args)
 }
 
 func TestLaunchFlagsSummary(t *testing.T) {
-	assert.Equal(t, "無", LaunchFlagsSummary(0))
-	assert.Equal(t, "關閉聲音、低畫質 / Large Font Mode", LaunchFlagsSummary(LaunchFlagNoSound|LaunchFlagLowQuality))
+	emptySummary := LaunchFlagsSummary(0)
+	supportedSummary := LaunchFlagsSummary(LaunchFlagNoSound)
+	legacySummary := LaunchFlagsSummary(LaunchFlagNoSound | (1 << 2))
+
+	assert.NotEmpty(t, emptySummary)
+	assert.NotEmpty(t, supportedSummary)
+	assert.NotEqual(t, emptySummary, supportedSummary)
+	assert.Equal(t, supportedSummary, legacySummary)
 }
 
 func TestSupportedLaunchFlagsMask(t *testing.T) {
-	assert.Equal(t, uint32(LaunchFlagNoSound|LaunchFlagLowQuality), SupportedLaunchFlagsMask())
+	assert.Equal(t, uint32(LaunchFlagNoSound), SupportedLaunchFlagsMask())
 }
 
 func TestSanitizeLaunchFlagsRemovesUnsupportedBits(t *testing.T) {

@@ -33,6 +33,7 @@ func printStartupAnnouncement(cfgDir string) {
 		lang.Startup.WarnNoteDelay,
 		lang.Startup.WarnNoteConfig,
 		lang.Startup.WarnNoteBattleNet,
+		lang.Startup.WarnNoteRegionLock,
 		lang.Startup.WarnNoteNoModify,
 		lang.Startup.WarnNoteCommunity,
 	)
@@ -59,6 +60,9 @@ func printMenu(accounts []account.Account, cfg *config.Config) {
 		options.option("a", lang.MainMenu.OptLaunchAll, lang.MainMenu.OptLaunchAllComment)
 		options.option("d", lang.MainMenu.OptDelay, displayDelay(cfg.LaunchDelay))
 		options.option("f", lang.MainMenu.OptFlags, lang.MainMenu.OptFlagsComment)
+		options.option("g", lang.MainMenu.OptGraphicsProfiles, lang.MainMenu.OptGraphicsProfilesComment)
+		options.option("m", lang.MainMenu.OptDefaultMods, lang.MainMenu.OptDefaultModsComment)
+		options.option("v", lang.MainMenu.OptDefaultRegions, lang.MainMenu.OptDefaultRegionsComment)
 		options.option("p", lang.MainMenu.OptD2RPath, cfg.D2RPath)
 		options.option("s", lang.MainMenu.OptSwitcher, switcherMenuOptionStatus(cfg))
 		options.option("r", lang.MainMenu.OptRefresh, "")

@@ -30,3 +30,23 @@ func TestFindRegion_NotFound(t *testing.T) {
 	r := FindRegion("XX")
 	assert.Nil(t, r)
 }
+
+func TestNormalizeRegionName(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"NA", "NA"},
+		{"na", "NA"},
+		{" EU ", "EU"},
+		{"asia", "Asia"},
+	}
+
+	for _, tt := range tests {
+		assert.Equal(t, tt.expected, NormalizeRegionName(tt.input))
+	}
+}
+
+func TestNormalizeRegionName_NotFound(t *testing.T) {
+	assert.Equal(t, "", NormalizeRegionName("XX"))
+}

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"d2rhl/internal/multiboxing/mods"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -15,8 +17,8 @@ func TestLoadAndSaveAccounts(t *testing.T) {
 
 	// 建立測試 CSV
 	accounts := []Account{
-		{Email: "test1@email.com", Password: "pass1", DisplayName: "Account1", LaunchFlags: LaunchFlagNoSound},
-		{Email: "test2@email.com", Password: "pass2", DisplayName: "Account2", LaunchFlags: LaunchFlagLowQuality},
+		{Email: "test1@email.com", Password: "pass1", DisplayName: "Account1", LaunchFlags: LaunchFlagNoSound, GraphicsProfile: "main-high", DefaultRegion: "EU", DefaultMod: mods.DefaultModVanilla},
+		{Email: "test2@email.com", Password: "pass2", DisplayName: "Account2"},
 	}
 
 	err := SaveAccounts(csvPath, accounts)
@@ -35,10 +37,16 @@ func TestLoadAndSaveAccounts(t *testing.T) {
 	assert.Equal(t, "pass1", loaded[0].Password)
 	assert.Equal(t, "Account1", loaded[0].DisplayName)
 	assert.Equal(t, uint32(LaunchFlagNoSound), loaded[0].LaunchFlags)
+	assert.Equal(t, "main-high", loaded[0].GraphicsProfile)
+	assert.Equal(t, "EU", loaded[0].DefaultRegion)
+	assert.Equal(t, mods.DefaultModVanilla, loaded[0].DefaultMod)
 
 	assert.Equal(t, "test2@email.com", loaded[1].Email)
 	assert.Equal(t, "Account2", loaded[1].DisplayName)
-	assert.Equal(t, uint32(LaunchFlagLowQuality), loaded[1].LaunchFlags)
+	assert.Equal(t, uint32(0), loaded[1].LaunchFlags)
+	assert.Equal(t, "", loaded[1].GraphicsProfile)
+	assert.Equal(t, "", loaded[1].DefaultRegion)
+	assert.Equal(t, "", loaded[1].DefaultMod)
 }
 
 func TestEnsureAccountsFileCreatesTemplate(t *testing.T) {
@@ -122,6 +130,125 @@ func TestLoadAccounts_InvalidLaunchFlagsFallsBackToZeroAndRewritesFile(t *testin
 	assert.Contains(t, string(data), "legacy@example.com,plain,Legacy,0")
 }
 
+func TestLoadAccounts_BackwardCompatWithoutGraphicsProfileColumn(t *testing.T) {
+	dir := t.TempDir()
+	csvPath := filepath.Join(dir, "accounts.csv")
+
+	content := append(utf8BOM, []byte("Email,Password,DisplayName,LaunchFlags,ToolFlags\nlegacy@example.com,plain,Legacy,1,0\n")...)
+	err := os.WriteFile(csvPath, content, 0o644)
+	assert.NoError(t, err)
+
+	loaded, err := LoadAccounts(csvPath)
+	assert.NoError(t, err)
+	assert.Len(t, loaded, 1)
+	assert.Equal(t, uint32(LaunchFlagNoSound), loaded[0].LaunchFlags)
+	assert.Equal(t, uint32(0), loaded[0].ToolFlags)
+	assert.Equal(t, "", loaded[0].GraphicsProfile)
+	assert.Equal(t, "", loaded[0].DefaultRegion)
+	assert.Equal(t, "", loaded[0].DefaultMod)
+}
+
+func TestLoadAccounts_BackwardCompatWithoutDefaultRegionColumn(t *testing.T) {
+	dir := t.TempDir()
+	csvPath := filepath.Join(dir, "accounts.csv")
+
+	content := append(utf8BOM, []byte("Email,Password,DisplayName,LaunchFlags,ToolFlags,GraphicsProfile\nlegacy@example.com,plain,Legacy,1,0,alt-low\n")...)
+	err := os.WriteFile(csvPath, content, 0o644)
+	assert.NoError(t, err)
+
+	loaded, err := LoadAccounts(csvPath)
+	assert.NoError(t, err)
+	assert.Len(t, loaded, 1)
+	assert.Equal(t, "alt-low", loaded[0].GraphicsProfile)
+	assert.Equal(t, "", loaded[0].DefaultRegion)
+	assert.Equal(t, "", loaded[0].DefaultMod)
+}
+
+func TestLoadAccounts_BackwardCompatWithoutDefaultModColumn(t *testing.T) {
+	dir := t.TempDir()
+	csvPath := filepath.Join(dir, "accounts.csv")
+
+	content := append(utf8BOM, []byte("Email,Password,DisplayName,LaunchFlags,ToolFlags,GraphicsProfile,DefaultRegion\nlegacy@example.com,plain,Legacy,1,0,alt-low,NA\n")...)
+	err := os.WriteFile(csvPath, content, 0o644)
+	assert.NoError(t, err)
+
+	loaded, err := LoadAccounts(csvPath)
+	assert.NoError(t, err)
+	assert.Len(t, loaded, 1)
+	assert.Equal(t, "alt-low", loaded[0].GraphicsProfile)
+	assert.Equal(t, "NA", loaded[0].DefaultRegion)
+	assert.Equal(t, "", loaded[0].DefaultMod)
+}
+
+func TestLoadAccounts_DefaultRegionColumn(t *testing.T) {
+	dir := t.TempDir()
+	csvPath := filepath.Join(dir, "accounts.csv")
+
+	content := append(utf8BOM, []byte("Email,Password,DisplayName,LaunchFlags,ToolFlags,GraphicsProfile,DefaultRegion\nlegacy@example.com,plain,Legacy,1,0,alt-low,asia\n")...)
+	err := os.WriteFile(csvPath, content, 0o644)
+	assert.NoError(t, err)
+
+	loaded, err := LoadAccounts(csvPath)
+	assert.NoError(t, err)
+	assert.Len(t, loaded, 1)
+	assert.Equal(t, "alt-low", loaded[0].GraphicsProfile)
+	assert.Equal(t, "Asia", loaded[0].DefaultRegion)
+	assert.Equal(t, "", loaded[0].DefaultMod)
+}
+
+func TestLoadAccounts_DefaultModColumn(t *testing.T) {
+	dir := t.TempDir()
+	csvPath := filepath.Join(dir, "accounts.csv")
+
+	content := append(utf8BOM, []byte("Email,Password,DisplayName,LaunchFlags,ToolFlags,GraphicsProfile,DefaultRegion,DefaultMod\nlegacy@example.com,plain,Legacy,1,0,alt-low,asia,vanilla\n")...)
+	err := os.WriteFile(csvPath, content, 0o644)
+	assert.NoError(t, err)
+
+	loaded, err := LoadAccounts(csvPath)
+	assert.NoError(t, err)
+	assert.Len(t, loaded, 1)
+	assert.Equal(t, "alt-low", loaded[0].GraphicsProfile)
+	assert.Equal(t, "Asia", loaded[0].DefaultRegion)
+	assert.Equal(t, mods.DefaultModVanilla, loaded[0].DefaultMod)
+}
+
+func TestLoadAccounts_InvalidDefaultRegionFallsBackToEmptyAndRewritesFile(t *testing.T) {
+	dir := t.TempDir()
+	csvPath := filepath.Join(dir, "accounts.csv")
+
+	content := append(utf8BOM, []byte("Email,Password,DisplayName,LaunchFlags,ToolFlags,GraphicsProfile,DefaultRegion\nlegacy@example.com,plain,Legacy,1,0,alt-low,moon\n")...)
+	err := os.WriteFile(csvPath, content, 0o644)
+	assert.NoError(t, err)
+
+	loaded, err := LoadAccounts(csvPath)
+	assert.NoError(t, err)
+	assert.Len(t, loaded, 1)
+	assert.Equal(t, "", loaded[0].DefaultRegion)
+	assert.Equal(t, "", loaded[0].DefaultMod)
+
+	data, err := os.ReadFile(csvPath)
+	assert.NoError(t, err)
+	assert.Contains(t, string(data), "legacy@example.com,plain,Legacy,1,0,alt-low,,")
+}
+
+func TestLoadAccounts_RemovesLegacyLowQualityFlagAndRewritesFile(t *testing.T) {
+	dir := t.TempDir()
+	csvPath := filepath.Join(dir, "accounts.csv")
+
+	content := append(utf8BOM, []byte("Email,Password,DisplayName,LaunchFlags\nlegacy@example.com,plain,Legacy,4\n")...)
+	err := os.WriteFile(csvPath, content, 0o644)
+	assert.NoError(t, err)
+
+	loaded, err := LoadAccounts(csvPath)
+	assert.NoError(t, err)
+	assert.Len(t, loaded, 1)
+	assert.Equal(t, uint32(0), loaded[0].LaunchFlags)
+
+	data, err := os.ReadFile(csvPath)
+	assert.NoError(t, err)
+	assert.Contains(t, string(data), "legacy@example.com,plain,Legacy,0,0,,,")
+}
+
 func TestLoadAccounts_RemovesUnsupportedLaunchFlagBitsAndRewritesFile(t *testing.T) {
 	dir := t.TempDir()
 	csvPath := filepath.Join(dir, "accounts.csv")
@@ -133,11 +260,11 @@ func TestLoadAccounts_RemovesUnsupportedLaunchFlagBitsAndRewritesFile(t *testing
 	loaded, err := LoadAccounts(csvPath)
 	assert.NoError(t, err)
 	assert.Len(t, loaded, 1)
-	assert.Equal(t, uint32(LaunchFlagNoSound|LaunchFlagLowQuality), loaded[0].LaunchFlags)
+	assert.Equal(t, uint32(LaunchFlagNoSound), loaded[0].LaunchFlags)
 
 	data, err := os.ReadFile(csvPath)
 	assert.NoError(t, err)
-	assert.Contains(t, string(data), "legacy@example.com,plain,Legacy,5")
+	assert.Contains(t, string(data), "legacy@example.com,plain,Legacy,1,0,,,")
 }
 
 func TestIsPasswordEncrypted(t *testing.T) {
