@@ -58,6 +58,7 @@ type Catalog struct {
 	Switcher         SwitcherCatalog
 	Flags            FlagsCatalog
 	GraphicsProfiles GraphicsProfilesCatalog
+	RegionDefaults   RegionDefaultsCatalog
 	D2RPath          D2RPathCatalog
 	Accounts         AccountsCatalog
 	Language         LanguageCatalog
@@ -138,6 +139,8 @@ type MainMenuCatalog struct {
 	OptFlagsComment            string
 	OptGraphicsProfiles        string
 	OptGraphicsProfilesComment string
+	OptDefaultRegions          string
+	OptDefaultRegionsComment   string
 	OptD2RPath                 string // comment is dynamic (cfg.D2RPath)
 	OptSwitcher                string // comment is dynamic (switcherMenuOptionStatus)
 	OptRefresh                 string
@@ -186,6 +189,9 @@ type LaunchCatalog struct {
 	RegionBatchTitle  string // heading for batch-launch region pick
 	RegionTargetLabel string // "準備啟動的帳號："
 	RegionInvalid     string
+	RegionUseDefaults string
+	RegionOverride    string
+	RegionMissing     string // fmt("%s")
 
 	// Mod selector
 	ModLoadFailed string // fmt("%v") – mods discovery error
@@ -422,6 +428,48 @@ type GraphicsProfilesCatalog struct {
 	BatchApplyFailed          string // fmt("%s", "%s", "%v")
 	MissingProfileCleared     string // fmt("%s", "%s")
 	MissingProfileClearFailed string // fmt("%v")
+}
+
+// RegionDefaultsCatalog holds strings for per-account default region flows.
+type RegionDefaultsCatalog struct {
+	Title            string
+	NoAccounts       string
+	StatusUnassigned string
+	Intro1           string
+	Intro2           string
+	Intro3           string
+
+	// Main sub-menu options
+	OptAssign string
+	OptClear  string
+
+	// Assignment flow
+	AssignModeTitle             string
+	AssignModeQuestion          string
+	OptRegionToAccounts         string
+	OptAccountToRegion          string
+	AssignByRegionTitle         string
+	AssignByRegionSelectPrompt  string
+	AssignByRegionAccountTitle  string // fmt("%s")
+	AssignByRegionAccountPrompt string // fmt("%s")
+	AssignByRegionAbout         string // fmt("%s")
+	AssignByAccountTitle        string
+	AssignByAccountSelectPrompt string
+	AssignByAccountRegionTitle  string // fmt("%s")
+	AssignByAccountRegionPrompt string // fmt("%s")
+	AssignByAccountAbout        string // fmt("%s", "%s")
+	AssignDone                  string // fmt("%s")
+
+	// Clear flow
+	ClearTitle         string
+	ClearNoAssignments string
+	ClearPrompt        string
+	ClearAbout         string
+	ClearDone          string
+
+	// Shared account rendering
+	AccountComment string // fmt("%s")
+	AccountItemFmt string // fmt("%d", "%s", "%s", "%s")
 }
 
 // D2RPathCatalog holds strings for D2R.exe path configuration.

@@ -21,6 +21,11 @@ var launchSuccessPauseSleep = time.Sleep
 
 const launchSuccessPauseDuration = 3 * time.Second
 
+type launchRegionChoice struct {
+	ManualRegion *d2r.Region
+	UseDefaults  bool
+}
+
 func launchAccount(acc *account.Account, accounts []account.Account, accountsFile string, cfg *config.Config) {
 	if !ensureLaunchReadyD2RPath(cfg) {
 		return
@@ -30,7 +35,7 @@ func launchAccount(acc *account.Account, accounts []account.Account, accountsFil
 		return
 	}
 
-	region, ok := promptLaunchRegion(lang.Launch.RegionSingleTitle, []*account.Account{acc})
+	regionChoice, ok := promptLaunchRegion(lang.Launch.RegionSingleTitle, []*account.Account{acc})
 	if !ok {
 		return
 	}
@@ -49,6 +54,12 @@ func launchAccount(acc *account.Account, accounts []account.Account, accountsFil
 	password, err := account.GetDecryptedPassword(acc)
 	if err != nil {
 		ui.errorf(lang.Launch.DecryptFailed, err)
+		return
+	}
+
+	region := resolveLaunchRegionChoice(regionChoice, *acc)
+	if region == nil {
+		showInputErrorAndPause(fmt.Sprintf(lang.Launch.RegionMissing, launchTargetAccountLabel(acc)))
 		return
 	}
 
@@ -89,7 +100,7 @@ func launchAll(accounts []account.Account, accountsFile string, cfg *config.Conf
 	}
 	ui.infof(lang.Launch.BatchOnlyPending, len(pendingAccounts))
 
-	region, ok := promptLaunchRegion(lang.Launch.RegionBatchTitle, pendingAccounts)
+	regionChoice, ok := promptLaunchRegion(lang.Launch.RegionBatchTitle, pendingAccounts)
 	if !ok {
 		return
 	}
@@ -111,6 +122,12 @@ func launchAll(accounts []account.Account, accountsFile string, cfg *config.Conf
 		password, err := account.GetDecryptedPassword(acc)
 		if err != nil {
 			ui.warningf(lang.Launch.BatchDecryptFailed, acc.DisplayName, err)
+			continue
+		}
+
+		region := resolveLaunchRegionChoice(regionChoice, *acc)
+		if region == nil {
+			ui.warningf(lang.Launch.RegionMissing, launchTargetAccountLabel(acc))
 			continue
 		}
 
@@ -189,14 +206,16 @@ func launchOffline(cfg *config.Config) {
 	ui.blankLine()
 }
 
-func promptLaunchRegion(title string, accounts []*account.Account) (*d2r.Region, bool) {
-	var result *d2r.Region
+func promptLaunchRegion(title string, accounts []*account.Account) (launchRegionChoice, bool) {
+	var result launchRegionChoice
 	_ = runMenu(func() {
 		ui.headf("%s", title)
 		ui.infof("%s", lang.Launch.RegionTargetLabel)
 		for _, line := range launchTargetAccountLines(accounts) {
 			ui.rawln(line)
 		}
+		ui.infof("%s", lang.Launch.RegionUseDefaults)
+		ui.infof("%s", lang.Launch.RegionOverride)
 		options := ui.subMenuOptions(func(options *cliMenuOptions) {
 			options.option("1", "NA", "")
 			options.option("2", "EU", "")
@@ -206,15 +225,25 @@ func promptLaunchRegion(title string, accounts []*account.Account) (*d2r.Region,
 			options.render()
 		})
 	}, func(input string) error {
+		if strings.TrimSpace(input) == "" {
+			missing := missingDefaultRegionAccountLabels(accounts)
+			if len(missing) > 0 {
+				showInputErrorAndPause(fmt.Sprintf(lang.Launch.RegionMissing, strings.Join(missing, ", ")))
+				return nil
+			}
+			result.UseDefaults = true
+			return errNavDone
+		}
+
 		region := parseRegionInput(input)
 		if region == nil {
 			showInputErrorAndPause(lang.Launch.RegionInvalid)
 			return nil
 		}
-		result = region
+		result.ManualRegion = region
 		return errNavDone
 	})
-	return result, result != nil
+	return result, result.UseDefaults || result.ManualRegion != nil
 }
 
 func launchTargetAccountLines(accounts []*account.Account) []string {
@@ -223,9 +252,49 @@ func launchTargetAccountLines(accounts []*account.Account) []string {
 		if acc == nil {
 			continue
 		}
-		lines = append(lines, fmt.Sprintf("  %s (%s)", acc.DisplayName, acc.Email))
+		lines = append(lines, fmt.Sprintf("  %s", launchTargetAccountLabel(acc)))
 	}
 	return lines
+}
+
+func missingDefaultRegionAccountLabels(accounts []*account.Account) []string {
+	labels := make([]string, 0, len(accounts))
+	for _, acc := range accounts {
+		if acc == nil {
+			continue
+		}
+		if d2r.NormalizeRegionName(acc.DefaultRegion) != "" {
+			continue
+		}
+		labels = append(labels, launchTargetAccountLabel(acc))
+	}
+	return labels
+}
+
+func resolveLaunchRegionChoice(choice launchRegionChoice, acc account.Account) *d2r.Region {
+	if choice.ManualRegion != nil {
+		return choice.ManualRegion
+	}
+	if !choice.UseDefaults {
+		return nil
+	}
+	return d2r.FindRegion(acc.DefaultRegion)
+}
+
+func launchTargetAccountLabel(acc *account.Account) string {
+	if acc == nil {
+		return ""
+	}
+	displayName := strings.TrimSpace(acc.DisplayName)
+	email := strings.TrimSpace(acc.Email)
+	switch {
+	case displayName == "":
+		return email
+	case email == "":
+		return displayName
+	default:
+		return fmt.Sprintf("%s (%s)", displayName, email)
+	}
 }
 
 func pauseAfterSuccessfulLaunch() {

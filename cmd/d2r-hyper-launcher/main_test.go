@@ -216,7 +216,7 @@ func TestPrintMenuKeepsChoicePromptInsideOptionGroup(t *testing.T) {
 		printMenu(nil, cfg)
 	})
 
-	assert.Equal(t, 1, countMenuBlocksWithKeys(output, []string{lang.MainMenu.OptByNumberKey, "0", "a", "d", "f", "g", "p", "s", "r", "l", "q"}))
+	assert.Equal(t, 1, countMenuBlocksWithKeys(output, []string{lang.MainMenu.OptByNumberKey, "0", "a", "d", "f", "g", "v", "p", "s", "r", "l", "q"}))
 	assert.Empty(t, linesWithPrefix(output, ui.prefix(uiMessagePrompt)+" "))
 
 	delayLine, ok := findMenuOptionLine(output, "d")
@@ -945,11 +945,12 @@ func TestPromptLaunchRegionKeepsCurrentMenuAfterInvalidInput(t *testing.T) {
 
 	output := captureStdout(t, func() {
 		withTestInput(t, "x\n\nb\n", func() {
-			region, ok := promptLaunchRegion("啟動指定帳號：選擇區域", []*account.Account{
+			choice, ok := promptLaunchRegion("啟動指定帳號：選擇區域", []*account.Account{
 				{DisplayName: "Alpha", Email: "alpha@example.com"},
 			})
 			assert.False(t, ok)
-			assert.Nil(t, region)
+			assert.Nil(t, choice.ManualRegion)
+			assert.False(t, choice.UseDefaults)
 		})
 	})
 
@@ -960,11 +961,12 @@ func TestPromptLaunchRegionKeepsCurrentMenuAfterInvalidInput(t *testing.T) {
 func TestPromptLaunchRegionShowsSingleTargetAccount(t *testing.T) {
 	output := captureStdout(t, func() {
 		withTestInput(t, "b\n", func() {
-			region, ok := promptLaunchRegion("啟動指定帳號：選擇區域", []*account.Account{
+			choice, ok := promptLaunchRegion("啟動指定帳號：選擇區域", []*account.Account{
 				{DisplayName: "Alpha", Email: "alpha@example.com"},
 			})
 			assert.False(t, ok)
-			assert.Nil(t, region)
+			assert.Nil(t, choice.ManualRegion)
+			assert.False(t, choice.UseDefaults)
 		})
 	})
 
@@ -976,12 +978,13 @@ func TestPromptLaunchRegionShowsSingleTargetAccount(t *testing.T) {
 func TestPromptLaunchRegionShowsBatchTargetAccounts(t *testing.T) {
 	output := captureStdout(t, func() {
 		withTestInput(t, "b\n", func() {
-			region, ok := promptLaunchRegion("啟動所有帳號：選擇區域", []*account.Account{
+			choice, ok := promptLaunchRegion("啟動所有帳號：選擇區域", []*account.Account{
 				{DisplayName: "Alpha", Email: "alpha@example.com"},
 				{DisplayName: "Bravo", Email: "bravo@example.com"},
 			})
 			assert.False(t, ok)
-			assert.Nil(t, region)
+			assert.Nil(t, choice.ManualRegion)
+			assert.False(t, choice.UseDefaults)
 		})
 	})
 
@@ -990,6 +993,54 @@ func TestPromptLaunchRegionShowsBatchTargetAccounts(t *testing.T) {
 	assert.Contains(t, output, "Bravo")
 	assert.Contains(t, output, "bravo@example.com")
 	assert.Equal(t, 1, countMenuBlocksWithKeys(output, []string{"1", "2", "3", "b", "h", "q"}))
+}
+
+func TestPromptLaunchRegionEnterUsesStoredDefaultMode(t *testing.T) {
+	withTestInput(t, "\n", func() {
+		choice, ok := promptLaunchRegion("啟動指定帳號：選擇區域", []*account.Account{
+			{DisplayName: "Alpha", Email: "alpha@example.com", DefaultRegion: "EU"},
+		})
+		assert.True(t, ok)
+		assert.True(t, choice.UseDefaults)
+		assert.Nil(t, choice.ManualRegion)
+	})
+}
+
+func TestPromptLaunchRegionEnterRequiresDefaultsForAllTargets(t *testing.T) {
+	originalCanSingleKeyContinue := ui.canSingleKeyContinue
+	t.Cleanup(func() {
+		ui.canSingleKeyContinue = originalCanSingleKeyContinue
+	})
+	ui.canSingleKeyContinue = func() bool { return false }
+
+	output := captureStdout(t, func() {
+		withTestInput(t, "\n\nb\n", func() {
+			choice, ok := promptLaunchRegion("啟動所有帳號：選擇區域", []*account.Account{
+				{DisplayName: "Alpha", Email: "alpha@example.com", DefaultRegion: "NA"},
+				{DisplayName: "Bravo", Email: "bravo@example.com"},
+			})
+			assert.False(t, ok)
+			assert.False(t, choice.UseDefaults)
+			assert.Nil(t, choice.ManualRegion)
+		})
+	})
+
+	assert.Equal(t, 1, strings.Count(output, ui.prefix(uiMessageError)+" "))
+	assert.Contains(t, output, "Bravo")
+	assert.Equal(t, 2, countMenuBlocksWithKeys(output, []string{"1", "2", "3", "b", "h", "q"}))
+}
+
+func TestPromptLaunchRegionAllowsManualOverrideWithoutStoredDefaults(t *testing.T) {
+	withTestInput(t, "2\n", func() {
+		choice, ok := promptLaunchRegion("啟動指定帳號：選擇區域", []*account.Account{
+			{DisplayName: "Alpha", Email: "alpha@example.com"},
+		})
+		assert.True(t, ok)
+		if assert.NotNil(t, choice.ManualRegion) {
+			assert.Equal(t, "EU", choice.ManualRegion.Name)
+		}
+		assert.False(t, choice.UseDefaults)
+	})
 }
 
 func captureStdout(t *testing.T, fn func()) string {

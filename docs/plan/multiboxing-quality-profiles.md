@@ -21,7 +21,7 @@
 ## 已確認的關鍵技術事實
 
 - D2R 的顯示 / 畫質 / 視窗設定目前仍以 `%USERPROFILE%\Saved Games\Diablo II Resurrected\Settings.json` 為核心，而不是 Windows 顯示控制台。
-- 目前帳號資料模型在 [account.go](..\..\internal\multiboxing\account\account.go)；`accounts.csv` 現在是 `Email,Password,DisplayName,LaunchFlags,ToolFlags,GraphicsProfile` 六欄。
+- 目前帳號資料模型在 [account.go](..\..\internal\multiboxing\account\account.go)；`accounts.csv` 現在是 `Email,Password,DisplayName,LaunchFlags,ToolFlags,GraphicsProfile,DefaultRegion` 七欄。
 - 現有 per-account 設定 UI 範本在 [cli_flags.go](..\..\cmd\d2r-hyper-launcher\cli_flags.go)；它已經有成熟的 `runMenu` / `runMenuRead`、`b` / `h` / `q` 契約可沿用。
 - 啟動切點在 [cli_launch.go](..\..\cmd\d2r-hyper-launcher\cli_launch.go) 很清楚：
   - 單帳號：`launchAccount()` 在 `selectLaunchMod()` 之後、`LaunchD2R()` 之前可插入 profile apply
@@ -83,13 +83,13 @@
 
 CSV 目標格式：
 
-`Email,Password,DisplayName,LaunchFlags,ToolFlags,GraphicsProfile`
+`Email,Password,DisplayName,LaunchFlags,ToolFlags,GraphicsProfile,DefaultRegion`
 
 向後相容要求：
 
-- 舊 5 欄 CSV 仍可正常載入
+- 舊 5 / 6 欄 CSV 仍可正常載入
 - 載入舊資料時 `GraphicsProfile` 自動視為空字串
-- 寫回時統一升級成 6 欄
+- 寫回時統一升級成 7 欄
 
 ### 2. profile 存放位置
 
@@ -232,7 +232,7 @@ CSV 目標格式：
 
 - `quality-settings-schema`
   - 擴充 `Account` 與 `accounts.csv`，新增 `GraphicsProfile`
-  - 保持舊 5 欄 CSV 向後相容，存檔時升級為 6 欄
+  - 保持舊 5 / 6 欄 CSV 向後相容，存檔時升級為 7 欄
 
 - `quality-profile-store`
   - 在 launcher home 下建立 `graphics-profiles` 存放邏輯
@@ -253,7 +253,7 @@ CSV 目標格式：
   - UX 盡量對齊 [cli_flags.go](..\..\cmd\d2r-hyper-launcher\cli_flags.go) 的操作感與導覽契約
 
 - `quality-docs-tests`
-  - 補齊 CSV 6 欄 / 5 欄向後相容測試
+  - 補齊 CSV 7 欄 / 6 欄 / 5 欄向後相容測試
   - 補齊 profile save / apply / skip-on-empty 行為測試
   - 更新 `README.md`、`README.en.md`、[multiboxing-usage-guide.md](..\multiboxing-usage-guide.md)
   - 視情況補充 [D2R_PARAMS.md](..\D2R_PARAMS.md)，說明這是 `Settings.json` profile 切換，而不是 Windows 顯示設定切換

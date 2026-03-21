@@ -54,9 +54,9 @@
 範例內容：
 
 ```csv
-Email,Password,DisplayName,LaunchFlags,ToolFlags,GraphicsProfile
-your-account1@example.com,your-password-here,主帳號-法師(倉庫/武器/飾品),,,boss-low
-your-account2@example.com,your-password-here,副帳號-野蠻人(廢寶/鑲材),,,
+Email,Password,DisplayName,LaunchFlags,ToolFlags,GraphicsProfile,DefaultRegion
+your-account1@example.com,your-password-here,主帳號-法師(倉庫/武器/飾品),,,boss-low,NA
+your-account2@example.com,your-password-here,副帳號-野蠻人(廢寶/鑲材),,,,EU
 ```
 
 欄位說明：
@@ -69,6 +69,7 @@ your-account2@example.com,your-password-here,副帳號-野蠻人(廢寶/鑲材),
 | `LaunchFlags` | 可先留空 | 這個帳號額外要帶的啟動旗標 bitflag；一般玩家可先留空，工具會自動 fallback 成 `0`，之後再回到主選單用 `f` 設定。目前只保留 `-ns`；每帳號不同畫質請改用 `GraphicsProfile` |
 | `ToolFlags` | 可先留空 | 工具內部的帳號功能設定 bitflag；可先留空，預設 `0`。目前支援：`1` = 把此帳號排除在 switcher 切換循環外（可在主選單 `s → [2]` 設定） |
 | `GraphicsProfile` | 可先留空 | 這個帳號要套用的具名畫質設定檔；建議用主選單 `g` 產生與指派。若留空，啟動時工具不會碰 `Settings.json` |
+| `DefaultRegion` | 可先留空 | 這個帳號預設要登入的區域 server；建議用主選單 `v` 設定。之後啟動指定帳號或 `a` 批次啟動時，進入 region 選單直接按 Enter 就會使用這裡的設定；若本次目標裡有人沒設定，工具會擋下並列出帳號，仍可改成手動選 `1` / `2` / `3` |
 
 `LaunchFlags` 目前常見對應如下：
 
@@ -138,6 +139,7 @@ your-account2@example.com,your-password-here,副帳號-野蠻人(廢寶/鑲材),
   d       設定啟動間隔
   f       設定帳號啟動 flag
   g       帳號畫質設定檔
+  v       帳號預設登入區域
   p       選擇 D2R.exe 路徑
   s       視窗切換設定
   l       語言設定 / Language
@@ -225,12 +227,34 @@ your-account2@example.com,your-password-here,副帳號-野蠻人(廢寶/鑲材),
 - 如果某個已保存的畫質設定檔仍被帳號指派，工具會先阻止刪除；請先清除或改派那些帳號
 - 如果某個帳號指派的畫質設定檔在啟動時找不到，launcher 會跳過覆蓋 `Settings.json`，並自動清空該帳號的 `GraphicsProfile` 指派
 
+## 設定帳號預設登入區域
+
+如果你常讓不同帳號固定登入不同 region，請走這條流程：
+
+1. 回到 launcher 主選單輸入 `v`
+2. 選 `1` 指派預設登入區域
+3. 依你習慣選操作方式：
+   - 先選某個 region，再一次套給多個帳號
+   - 或先選某個 account，再替它指定 region
+4. 如果之後不想讓某個帳號保留預設值，再用 `2` 清除預設登入區域
+
+### `v` 內可以做什麼
+
+- `1` 指派預設登入區域
+- `2` 清除預設登入區域
+
+### Enter 會怎麼用這個設定
+
+- 啟動指定帳號或 `a` 批次啟動進入 region 選單時，直接按 Enter，工具就會改用帳號已保存的 `DefaultRegion`
+- 若你手動輸入 `1` / `2` / `3`，那只是這次啟動的單次覆蓋，不會回寫到 `accounts.csv`
+- 若本次目標裡有任何帳號尚未設定 `DefaultRegion`，工具會直接擋下並列出那些帳號，避免偷偷 fallback 到別的區域
+
 ## 啟動單一帳號
 
 1. 在主選單輸入帳號前面的數字，例如 `1`
 2. 工具會先檢查目前設定的 `D2R.exe` 是否真的存在；如果路徑失效，會直接提示你輸入 `p` 重新選路徑
 3. 如果這個帳號對應的 `D2R-<DisplayName>` 視窗已經存在，工具會直接阻止重複啟動，避免同一帳號被連續再開一次
-4. 選擇區域：`1=NA`、`2=EU`、`3=Asia`
+4. 選擇區域：`1=NA`、`2=EU`、`3=Asia`；若該帳號已設定 `DefaultRegion`，也可以直接按 Enter 使用預設值
 5. 如果 `D2R.exe` 同層的 `mods\` 目錄下有已安裝 mod，工具也會讓你選擇這次單帳號啟動要套用哪一個 mod
 6. 如果這個帳號在 `LaunchFlags` 已設定額外旗標，工具會一併帶入這些啟動參數
 7. 工具會自動：
@@ -269,12 +293,13 @@ your-account2@example.com,your-password-here,副帳號-野蠻人(廢寶/鑲材),
 1. 工具會先檢查目前設定的 `D2R.exe` 是否真的存在；如果路徑失效，會直接提示你輸入 `p` 重新選路徑
 2. 工具會先預掃描目前已開啟的 D2R 視窗，並把整份帳號清單明確列出成 `[已啟動]` / `[未啟動]`
 3. 如果全部帳號都已經在執行中，就會直接結束，不再多問區域或 mod
-4. 確定還有待啟動帳號時，才會再讓你選區域
+4. 確定還有待啟動帳號時，才會再讓你選區域；此時可直接按 Enter，讓每個待啟動帳號各自使用自己的 `DefaultRegion`，也可手動輸入 `1` / `2` / `3` 讓本次全部帳號共用同一個 region
 5. 如果 `D2R.exe` 同層的 `mods\` 目錄下有已安裝 mod，工具會先讓你選擇這次批次啟動要套用哪一個 mod
 6. 每次啟動時只會處理上面標示為 `[未啟動]` 的帳號，不會把等待時間浪費在已經開啟的帳號上
 7. 每個帳號若已設定自己的 `LaunchFlags`，工具也會在該帳號啟動時一併帶入
 8. 每個帳號若已指派自己的 `GraphicsProfile`，工具會在該帳號 `LaunchD2R()` 前先套用對應的 `Settings.json`；未指派帳號則完全略過，不碰全域設定檔
-9. 每次啟動之間只會在「下一個真的還沒啟動的帳號」之前等待 `launch_delay`；若你設定的是範圍，工具會在每次等待前重新隨機取一個秒數
+9. 如果你是按 Enter 走預設 region，但其中任何一個待啟動帳號尚未設定 `DefaultRegion`，工具會直接擋下並列出帳號，讓你改成手動選區域或回去先補設定
+10. 每次啟動之間只會在「下一個真的還沒啟動的帳號」之前等待 `launch_delay`；若你設定的是範圍，工具會在每次等待前重新隨機取一個秒數
 
 ## 離線模式
 
